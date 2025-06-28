@@ -21,49 +21,418 @@
 
 ---
 
-## 시스템 구성도 (시퀀스 다이어그램)
+## 사용자 인증 + 송금 요청 초기
+```mermaid
+sequenceDiagram
+    participant Client as 사용자(Client)
+    participant API as API Gateway
+    participant Auth as Auth Server
+    participant Kafka as Kafka Broker
+
+    %% 인증
+    Client->>Auth: JWT 인증 요청
+    alt 인증 성공
+        Auth-->>Client: 액세스 토큰
+    else 인증 실패
+        Auth-->>Client: 401 Unauthorized
+        Client->>Client: 인증 중단
+    end
+
+    %% 송금 요청 → Kafka 전파
+    Client->>API: POST /transfer
+    API->>Kafka: emit transfer.requested (txId 포함)
+    Kafka-->>API: ack
+    API-->>Client: 요청 수신 완료
+
+```
+
+##  송금 처리, Redis 차감, RDB 기록, Kafka 송금 완료 이벤트 전파
+```mermaid
+sequenceDiagram
+    participant Kafka as Kafka Broker
+    participant TxWorker as 송금 처리기
+    participant Redis as Redis (잔액 캐시)
+    participant RDB as RDB (Ledger)
+    participant DLQ as Kafka DLQ
+    participant Slack as Slack Webhook
+    participant SyncQ as RDB Sync Queue
+    participant TxProjector as 거래 캐시 구성 컨슈머
+    participant Projection as 거래 조회 캐시
+
+    Kafka->>TxWorker: consume transfer.requested
+    TxWorker->>Redis: EVAL Lua 잔액 차감 + TTL 기록
+    alt 잔액 부족
+        Redis-->>TxWorker: 실패
+        TxWorker->>Slack: 송금 실패 알림 (잔액 부족)
+    else 잔액 충분
+        Redis-->>TxWorker: 차감 성공
+        TxWorker->>RDB: INSERT 거래 INIT 상태
+        alt RDB 실패
+            RDB-->>TxWorker: 실패
+            TxWorker->>SyncQ: emit tx.sync_required
+            TxWorker->>Redis: SET tx:{txId} = SYNC_PENDING
+            TxWorker->>Slack: RDB 기록 실패 알림
+        else RDB 성공
+            RDB-->>TxWorker: 성공
+            TxWorker->>Redis: SET tx:{txId} = COMPLETED
+            TxWorker->>Kafka: emit transfer.completed
+            alt Kafka 실패
+                Kafka-->>TxWorker: 실패
+                TxWorker->>DLQ: emit transfer.kafka_failed
+                TxWorker->>Slack: Kafka 실패 알림
+                TxWorker->>SyncQ: emit transfer.failed → DLQ 회복 편입
+            else Kafka 성공
+                Kafka-->>TxWorker: ack
+            end
+        end
+    end
+
+    Kafka->>TxProjector: consume transfer.completed
+    TxProjector->>Projection: 업데이트 recent_tx:{userId}
+```
+
+## 송금 완료 후 이상 거래 탐지 흐름 및 운영자(관리자)의 조치 및 감사 처리
+```mermaid
+sequenceDiagram
+    participant Kafka as Kafka Broker
+    participant FDS as FDS Engine
+    participant Redis as Redis (캐시)
+    participant Projection as 거래 조회 캐시
+    participant RDB as RDB (Ledger)
+    participant Slack as Slack Webhook
+    participant Admin as Admin Console
+
+    Kafka->>FDS: consume transfer.completed
+    FDS->>Redis: 조회 fds:detect:{userId}:{rule}
+    alt 캐시 HIT
+        FDS-->>none: 중복 탐지 종료
+    else 캐시 MISS
+        FDS->>Projection: 슬라이딩 윈도우 조회
+        alt Projection 장애
+            FDS->>RDB: Fallback 조회
+        end
+        FDS->>FDS: 룰 or ML 판단 수행
+        alt 이상 없음
+            FDS-->>none: 탐지 종료
+        else 이상 탐지
+            FDS->>Redis: SET fds:detect:{userId}:{rule} = true (TTL 5분)
+            FDS->>RDB: INSERT detection_log (hash, score, 룰 코드 포함)
+            par 알림 및 트리거
+                FDS->>Slack: 이상 거래 탐지 알림
+                FDS->>Admin: 탐지 UI Push (상태: NEW)
+            end
+            FDS->>Kafka: emit rollback.requested
+        end
+    end
+
+    Admin->>RDB: SELECT detection_log
+    RDB-->>Admin: 상세 응답
+    Admin->>RDB: UPDATE detection_log 상태 (확인됨, 무시 등)
+    Admin->>RDB: INSERT admin_audit_log
+    Admin->>Kafka: emit admin.actioned
+    alt 조치에 따른 후속 처리
+        Kafka->>FDS: consume admin.actioned
+        FDS->>RDB: 탐지 이력 아카이브 or 분석 제외 처리
+    end
+    Admin->>Slack: 조치 결과 공유
+```
+
+## 배치 - 실시간 보정(SyncConsumer)**과 일일 보정(Batch Job) 처리
+```mermaid
+sequenceDiagram
+    participant SyncQ as RDB Sync Queue
+    participant SyncConsumer as 실시간 보정 Consumer
+    participant RDB as RDB (Ledger)
+    participant Redis as Redis (잔액 캐시)
+    participant Slack as Slack Webhook
+    participant Batch as Batch Job
+
+    SyncQ->>SyncConsumer: consume tx.sync_required
+    SyncConsumer->>RDB: SELECT txId 존재 여부
+    alt 존재하지 않음
+        SyncConsumer->>RDB: INSERT 거래 복구
+        SyncConsumer->>Redis: SET tx:{txId} = COMPLETED
+        SyncConsumer->>RDB: UPDATE tx 상태 = COMPLETED
+        SyncConsumer->>Slack: 복구 성공
+    else 이미 존재
+        SyncConsumer->>Slack: 중복 무시
+    end
+    SyncConsumer->>RDB: INSERT correction_log
+
+    loop 매일 새벽
+        Batch->>SyncQ: consume tx.sync_required
+        SyncQ->>RDB: txId 존재 여부 확인
+        alt 미기록
+            SyncQ->>RDB: INSERT 거래 복구
+            SyncQ->>Slack: 복구 완료
+        else 이미 있음
+            SyncQ->>Slack: 중복 무시
+        end
+        SyncQ->>RDB: INSERT correction_log
+    end
+```
+
+## 전체 시스템 구성도
 
 ```mermaid
 sequenceDiagram
-  participant Client as User(Client)
-  participant API as API Server
-  participant Redis as Redis
-  participant RDB as RDB (DB)
-  participant Kafka as Kafka Broker
-  participant FDS as FDS Consumer
-  participant Admin as Admin Dashboard
+    participant Client as 사용자(Client)
+    participant API as API Gateway
+    participant Auth as Auth Server
+    participant Redis as Redis (잔액 캐시)
+    participant RDB as RDB (Ledger)
+    participant Kafka as Kafka Broker
+    participant TxWorker as 송금 처리기
+    participant FDS as FDS Engine
+    participant Slack as Slack Webhook
+    participant Admin as Admin Console
+    participant DLQ as Kafka DLQ
+    participant SyncQ as RDB Sync Queue
+    participant SyncConsumer as 실시간 보정 Consumer
+    participant Batch as Batch Job
+    participant Projection as 거래 조회 캐시
+    participant TxProjector as 거래 캐시 구성 컨슈머
 
-  Client->>API: 송금 요청 (금액, 수신자, 디바이스, IP 등)
-  API->>Redis: 잔액 조회 및 조건부 차감 (Lua Script)
-  alt 잔액 부족
-    API-->>Client: 실패 응답 (잔액 부족)
-  else 잔액 충분
-    API->>RDB: 트랜잭션 기록 (송금 내역 저장)
-    alt 트랜잭션 실패
-      API->>Redis: Rollback 큐 등록 / 보정 예약
-      API-->>Client: 실패 응답 (서버 오류)
-    else 트랜잭션 성공
-      API->>Kafka: 거래 이벤트 발행 (transactions topic)
-      API-->>Client: 성공 응답
+%% 인증
+    Client->>Auth: JWT 인증 요청
+    alt 인증 성공
+        Auth-->>Client: 액세스 토큰
+    else 인증 실패
+        Auth-->>Client: 401 Unauthorized
+        Client->>Client: 인증 중단
     end
-  end
 
-  Kafka->>FDS: 거래 이벤트 Consume
-  FDS->>Redis: 최근 거래 이력 조회 (Sliding window)
-  FDS->>FDS: 룰 기반 탐지 판단
-  alt 이상 없음
-    FDS-->>none: 처리 종료
-  else 이상 거래
-    FDS->>Redis: 이상 탐지 캐시 기록 (TTL)
-    FDS->>RDB: 탐지 로그 저장
-    FDS->>Admin: 이상 거래 표시
-  end
+%% 송금 요청 → Kafka 전파
+    Client->>API: POST /transfer
+    API->>Kafka: emit transfer.requested (txId 포함)
+    Kafka-->>API: ack
+    API-->>Client: 요청 수신 완료
 
-  Admin->>RDB: 탐지 로그 조회
-  RDB-->>Admin: 상세 로그 응답
+%% 송금 처리기 (TxWorker)
+    Kafka->>TxWorker: consume transfer.requested
+    TxWorker->>Redis: EVAL Lua 잔액 차감 + TTL 기록
+    alt 잔액 부족
+        Redis-->>TxWorker: 실패
+        TxWorker->>Slack: 송금 실패 알림 (잔액 부족)
+    else 잔액 충분
+        Redis-->>TxWorker: 차감 성공
+        TxWorker->>RDB: INSERT 거래 INIT 상태
+        alt RDB 실패
+            RDB-->>TxWorker: 실패
+            TxWorker->>SyncQ: emit tx.sync_required
+            TxWorker->>Redis: SET tx:{txId} = SYNC_PENDING
+            TxWorker->>Slack: RDB 기록 실패 알림
+        else RDB 성공
+            RDB-->>TxWorker: 성공
+            TxWorker->>Redis: SET tx:{txId} = COMPLETED
+            TxWorker->>Kafka: emit transfer.completed
+            alt Kafka 실패
+                Kafka-->>TxWorker: 실패
+                TxWorker->>DLQ: emit transfer.kafka_failed
+                TxWorker->>Slack: Kafka 실패 알림
+                TxWorker->>SyncQ: emit transfer.failed → DLQ 회복 편입
+            else Kafka 성공
+                Kafka-->>TxWorker: ack
+            end
+        end
+    end
 
-  Note over Admin, RDB: 매일 새벽 Batch Report 생성 (Spring Batch)
+%% 거래 조회 Projection 구성
+    Kafka->>TxProjector: consume transfer.completed
+    TxProjector->>Projection: 업데이트 recent_tx:{userId}
+
+%% 이상 거래 탐지기
+    Kafka->>FDS: consume transfer.completed
+    FDS->>Redis: 조회 fds:detect:{userId}:{rule}
+    alt 캐시 HIT
+        FDS-->>none: 중복 탐지 종료
+    else 캐시 MISS
+        FDS->>Projection: 슬라이딩 윈도우 조회
+        alt Projection 장애
+            FDS->>RDB: Fallback 조회
+        end
+        FDS->>FDS: 룰 or ML 판단 수행
+        alt 이상 없음
+            FDS-->>none: 탐지 종료
+        else 이상 탐지
+            FDS->>Redis: SET fds:detect:{userId}:{rule} = true (TTL 5분)
+            FDS->>RDB: INSERT detection_log (hash, score, 룰 코드 포함)
+            par 알림 및 트리거
+                FDS->>Slack: 이상 거래 탐지 알림
+                FDS->>Admin: 탐지 UI Push (상태: NEW)
+            end
+            FDS->>Kafka: emit rollback.requested
+        end
+    end
+
+%% 자동 롤백 처리
+    Kafka->>API: consume rollback.requested
+    API->>RDB: SELECT tx 상태
+    RDB-->>API: 상태 반환
+    API->>RDB: INSERT rollback_tx_log
+    API->>Redis: INCRBY 잔액 복구
+    API->>Redis: SET tx:{txId} = ROLLED_BACK
+    API->>Slack: 롤백 완료 알림
+
+%% 운영자 대응
+    Admin->>RDB: SELECT detection_log
+    RDB-->>Admin: 상세 응답
+    Admin->>RDB: UPDATE detection_log 상태 (확인됨, 무시 등)
+    Admin->>RDB: INSERT admin_audit_log
+    Admin->>Kafka: emit admin.actioned
+    alt 조치에 따른 후속 처리
+        Kafka->>FDS: consume admin.actioned
+        FDS->>RDB: 탐지 이력 아카이브 or 분석 제외 처리
+    end
+    Admin->>Slack: 조치 결과 공유
+
+%% 실시간 보정
+    SyncQ->>SyncConsumer: consume tx.sync_required
+    SyncConsumer->>RDB: SELECT txId 존재 여부
+    alt 존재하지 않음
+        SyncConsumer->>RDB: INSERT 거래 복구
+        SyncConsumer->>Redis: SET tx:{txId} = COMPLETED
+        SyncConsumer->>RDB: UPDATE tx 상태 = COMPLETED
+        SyncConsumer->>Slack: 복구 성공
+    else 이미 존재
+        SyncConsumer->>Slack: 중복 무시
+    end
+    SyncConsumer->>RDB: INSERT correction_log
+
+%% 정기 보정 (Batch)
+    loop 매일 새벽
+        Batch->>SyncQ: consume tx.sync_required
+        SyncQ->>RDB: txId 존재 여부 확인
+        alt 미기록
+            SyncQ->>RDB: INSERT 거래 복구
+            SyncQ->>Slack: 복구 완료
+        else 이미 있음
+            SyncQ->>Slack: 중복 무시
+        end
+        SyncQ->>RDB: INSERT correction_log
+    end
+
 ```
+## 흐름 설명 
+
+## 인증 – 거래의 전제 조건
+사용자는 송금 요청 전에 JWT 기반 인증 과정을 거칩니다.  
+인증에 성공한 사용자만 API 접근이 가능하며, 실패할 경우 모든 거래 흐름은 즉시 종료됩니다.  
+이 단계는 FDS 탐지 대상의 user identity 확보를 위한 전제 조건입니다.  
+
+## 송금 요청 – 트랜잭션 시작은 메시지 발행
+인증이 완료되면,  
+API는 송금 요청 데이터를 Kafka에 transfer.requested 이벤트로 발행합니다.  
+이 시점에서 API는 사용자에게 “요청 수신 완료”만 응답하며,  
+실제 송금 처리는 비동기적으로 TxWorker 컨슈머가 담당합니다.  
+
+이 구조는 API 서버가 트랜잭션 상태 책임을 지지 않고,  
+처리 책임을 이벤트 기반으로 위임하는 구조입니다.  
+
+## 송금 처리기 – 트랜잭션 확정 주체
+transfer.requested 이벤트를 받은 TxWorker는  
+Redis에서 Lua 기반 잔액 차감을 수행합니다. (TTL 5분, txId 기반 key 저장)  
+
+분기:  
+
+잔액 부족 → Slack 알림 후 종료  
+
+잔액 충분 → RDB에 거래를 INIT 상태로 저장 시도  
+
+트랜잭션 처리 결과 – 복구 가능 구조 설계  
+성공 시:  
+txId를 Redis에 COMPLETED로 마킹  
+Kafka에 transfer.completed 이벤트 발행  
+이 이벤트는 FDS 탐지와 기타 후속 시스템에 전달됨  
+
+실패 시:  
+Redis에 tx:{txId} = SYNC_PENDING  
+SyncQ에 tx.sync_required 이벤트 발행  
+이 트랜잭션은 복구 대상으로 전환  
+Slack으로 운영자에게 실패 상황을 전달함  
+
+RDB 실패를 “영구 실패”가 아닌 “복구 대기 상태”로 전환함으로써,  
+데이터 유실을 방지하고 운영자 감지 가능성을 높입니다.  
+
+## Kafka Publish 실패 – 시스템 회복 포인트
+transfer.completed 이벤트 발행 실패 시:  
+
+DLQ로 transfer.kafka_failed 이벤트를 발행  
+
+Slack을 통해 장애 상황을 즉시 알림  
+
+이후 DLQ에 쌓인 이벤트는 SyncQ로 이동하여  
+보정 대상으로 전환되며, Kafka 기반 장애 복구 루프에 자동 진입할 수 있도록 설계됩니다.  
+
+## 이상 거래 탐지 – 로그 기반 탐지와 중복 제어
+FDS 엔진은 transfer.completed 이벤트를 consume하고,  
+캐시된 탐지 여부(fds:detect:{userId}:{rule})를 조회하여 중복 탐지를 방지합니다.  
+
+캐시 MISS인 경우:  
+최근 거래 슬라이딩 윈도우 조회 (Projection → Redis → fallback to RDB)  
+룰 기반 또는 ML 판단 수행  
+
+이상 탐지 발생 시:  
+Redis에 탐지 캐시 저장 (5분 TTL)  
+RDB에 detection_log 저장  
+Slack + Admin UI에 탐지 알림 전달  
+Kafka에 rollback.requested 이벤트 발행  
+
+탐지 판단은 단순 TTL에 의존하지 않고, 로그 기반 중복 제어를 포함하여 설계됐습니다.  
+
+## 자동 롤백 – 이상 거래 복구  
+rollback.requested 이벤트를 consume한 API는  
+해당 트랜잭션 상태를 확인하고, 아래 행위를 수행합니다:  
+
+rollback_tx_log 저장  
+
+Redis에 잔액 복구 (INCRBY)  
+
+tx 상태를 ROLLED_BACK으로 갱신  
+
+Slack에 롤백 완료 알림 발송  
+
+이 시점에서 트랜잭션은 복구 완료된 상태가 되며,  
+운영자 및 탐지 기록에 모두 명시적으로 반영됩니다.  
+
+## 운영자 조치 – 사람의 개입이 시스템에 반영됨  
+Admin은 UI에서 탐지 로그를 조회하고,  
+필요 시 탐지 상태를 변경합니다 (확인됨, 무시됨, 차단됨 등)  
+
+모든 조치는 아래 흐름을 따릅니다:  
+
+detection 상태 업데이트  
+
+admin_audit_log 기록 (조치자, 사유, 시점)  
+
+Kafka에 admin.actioned 이벤트 발행  
+
+Slack으로 조치 결과 알림  
+
+설계상 Admin 조치는 단순히 UI 변경이 아니라,  
+이벤트 흐름에 개입되는 행위로 인식되도록 설계되어 있습니다.  
+
+## 실시간 보정 – 상태 회복을 위한 자동 복구 루프
+SyncQ에 쌓인 tx.sync_required 메시지를 SyncConsumer가 consume합니다.  
+
+처리 로직:  
+
+txId가 RDB에 존재하지 않으면 → 거래 복구 INSERT  
+
+Redis에 tx:{txId} = COMPLETED 갱신  
+
+Slack 알림 + correction_log 기록  
+
+이 흐름은 Redis TTL 만료, DB 지연, Kafka 실패 등  
+시스템 비정상 상황에도 트랜잭션 유실을 방지하는 핵심 보정 루틴입니다.  
+
+## 정기 보정 – 누락 복구 보장
+실시간 보정 외에도,  
+Batch 작업이 매일 새벽 SyncQ를 재처리하여  
+누락된 복구가 없는지 2차 확인합니다.  
+correction_log를 통해 운영 이력도 남습니다.  
+
+---
 
 ## 기술 스택
 - Java 17 / Spring Boot / Spring Security / JPA (일부 영역)
