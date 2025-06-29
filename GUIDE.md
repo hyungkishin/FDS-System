@@ -354,6 +354,44 @@ sequenceDiagram
 ```
 ---
 
+
+from IPython.display import Markdown
+
+output = """
+# 📄 Redis Key TTL 정책 문서 + 상태별 보정 흐름 대응표
+
+---
+
+## 1. Redis Key TTL 정책
+
+| Redis Key                            | 용도                            | TTL        | 설명 |
+|--------------------------------------|----------------------------------|------------|------|
+| `tx:{txId}:status = INIT`            | 거래 시작 후 → RDB 기록 전      | 2분 (120s) | Redis 차감 후 RDB 실패 감지를 위한 유지 시간 |
+| `tx:{txId}:status = SYNC_PENDING`    | RDB 실패 후 보정 대기            | 5분 (300s) | SyncConsumer가 복구하기 위한 유예 시간 |
+| `tx:{txId}:status = COMPLETED`       | 거래 성공 상태                  | 5~10분     | 탐지, 조회 구성, 상태 추적용 |
+| `tx:{txId}:status = KAFKA_FAILED`    | Kafka emit 실패 후 DLQ 전송됨   | 10분       | DLQ 재처리 감지용 |
+| `fds:detect:{userId}:{rule}`         | 룰 중복 탐지 방지                | 5분 (300s) | 동일 룰 알림/탐지 중복 방지 |
+| `rollback:block:{txId}`              | 롤백 중복 실행 방지             | 5분 (300s) | 동시에 rollback.approved 중복 방지 |
+| `recentTx:{userId}` (ZSET)           | 10분 간 거래 이력               | 지속 유지   | sliding window 룰 기반 탐지 (ZREMRANGEBYSCORE 사용)
+
+---
+
+## 2. 상태별 보정 흐름 대응표
+
+| 상태 (`tx:{txId}:status`) | 발생 조건                         | TTL       | 보정 흐름                                 |
+|---------------------------|-----------------------------------|-----------|-------------------------------------------|
+| `INIT`                    | Redis 차감 완료, RDB 전           | 2분       | RDB 실패 시 → SYNC_PENDING으로 갱신       |
+| `SYNC_PENDING`            | RDB 기록 실패                     | 5분       | SyncConsumer가 txId 존재 여부 검사        |
+| `COMPLETED`               | Redis 차감 + RDB 기록 + Kafka emit 성공 | 5~10분 | FDS 탐지, 캐시 갱신 등 후속 처리 사용     |
+| `KAFKA_FAILED`            | Kafka emit 실패                   | 10분      | DLQ에서 retry or admin replay 필요        |
+| 없음                      | TTL 만료 or 유실                 | 없음      | 배치에서 RDB 기반 txId 추출 후 Redis 보강 |
+
+---
+
+> TTL 기준은 `복구 주기 + 탐지 흐름 + 운영 대응 시간`을 보장할 만큼만 유지해야 하며,  
+너무 길면 메모리 낭비 / 너무 짧으면 보정 실패 위험이 있음.
+
+
 ## 기술 스택
 - Java 17 / Spring Boot / Spring Security / JPA (일부 영역)
 - Kafka / Redis / MySQL
