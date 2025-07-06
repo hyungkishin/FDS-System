@@ -1,0 +1,69 @@
+@startuml
+!define table(x) class x << (T,#FFAAAA) >>
+!define primary_key(x) <b>x</b>
+!define foreign_key(x) <i>x</i>
+
+table(users) {
+    primary_key(id): UUID
+    name: string
+    email: string
+    created_at: datetime
+}
+
+table(transactions) {
+    primary_key(id): UUID
+    foreign_key(user_id): UUID
+    receiver_id: UUID
+    amount: bigint
+    status: string
+    created_at: datetime
+    -- INDEX(user_id, created_at DESC)
+    -- INDEX(status)
+}
+
+table(tx_history) {
+    primary_key(id): UUID
+    foreign_key(tx_id): UUID
+    prev_status: string
+    next_status: string
+    changed_at: datetime
+    changed_by: string
+    -- INDEX(tx_id)
+}
+
+table(correction_log) {
+    primary_key(id): UUID
+    foreign_key(tx_id): UUID
+    amount: bigint
+    restored_at: datetime
+    restored_by: string
+    reason: string
+    -- UNIQUE(tx_id)
+}
+
+table(rules) {
+    primary_key(id): UUID
+    rule_name: string
+    condition_json: json
+    threshold: int
+    enabled: boolean
+    created_at: datetime
+    -- UNIQUE(rule_name)
+}
+
+table(risk_logs) {
+    primary_key(id): UUID
+    foreign_key(tx_id): UUID
+    rule_hit: boolean
+    ai_score: float
+    final_decision: string
+    evaluated_at: datetime
+    -- INDEX(tx_id)
+    -- INDEX(final_decision)
+}
+
+users ||--o{ transactions : owns
+transactions ||--o{ tx_history : logs
+transactions ||--o{ correction_log : restores
+transactions ||--o{ risk_logs : evaluates
+@enduml

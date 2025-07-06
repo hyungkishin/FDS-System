@@ -1,0 +1,45 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+LAYOUT_WITH_LEGEND()
+
+Person(admin, "운영자", "탐지 룰 관리 및 모니터링")
+Person(user, "일반 사용자", "송금 요청을 수행함")
+
+System_Boundary(system, "FDS 시스템") {
+
+  Container(api, "API Server", "Spring Boot", "송금 API, 인증 처리")
+  Container(redis, "Redis", "Redis", "잔액 캐시 및 TTL 상태 관리")
+  Container(kafka, "Kafka", "Apache Kafka", "이벤트 브로커")
+  Container(rdb, "PostgreSQL", "Database", "트랜잭션 및 상태 저장")
+  Container(ws, "WebSocket Gateway", "Node.js or Spring", "실시간 이상 알림 전달")
+  Container(txWorker, "TxWorker", "Kafka Consumer", "트랜잭션 RDB 처리 담당")
+  Container(riskEval, "RiskEval", "Kafka Consumer", "룰/AI 기반 이상 탐지 판단")
+  Container(syncWorker, "SyncWorker", "Kafka Consumer", "DLQ 복구 처리")
+  Container(adminUI, "Admin UI", "React", "룰 등록 및 실시간 모니터링")
+  Container(slack, "Slack", "Webhook", "이상 거래 운영 알림")
+
+}
+
+Rel(user, api, "송금 요청")
+Rel(api, redis, "잔액 차감 Lua")
+Rel(api, kafka, "emit transfer.initiated")
+
+Rel(kafka, txWorker, "consume transfer.initiated")
+Rel(txWorker, rdb, "INSERT tx")
+Rel(txWorker, kafka, "emit transfer.created")
+
+Rel(kafka, riskEval, "consume transfer.created")
+Rel(riskEval, kafka, "emit transfer.flagged or approved")
+Rel(riskEval, ws, "send alert")
+Rel(riskEval, slack, "send alert")
+
+Rel(kafka, syncWorker, "consume tx.sync_required")
+Rel(syncWorker, rdb, "복구 INSERT")
+Rel(syncWorker, redis, "SET TTL 상태")
+
+Rel(admin, adminUI, "룰 등록/수정")
+Rel(adminUI, api, "POST /rules")
+Rel(api, redis, "Store 룰")
+
+@enduml

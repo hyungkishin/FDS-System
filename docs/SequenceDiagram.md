@@ -1,36 +1,4 @@
-# 이상 거래 실시간 탐지 시스템 (FDS)
-
-Kafka 기반 이벤트 스트리밍과 Redis 캐시, Rule/AI 기반 이상 거래 탐지, DLQ 복구, WebSocket 실시간 알림까지 통합한 실전형 FDS 아키텍처입니다.
-
-## 프로젝트 개요
-
-사용자 거래에서 이상 징후를 실시간으로 감지하고, 관리자에게 알림과 리포트를 제공하는 이상 거래 탐지 시스템입니다.  
-**실시간성과 장애 복구, 확장성, 운영자 관측성까지 모두 고려한 아키텍처 설계에 중점을 두었습니다.**
-
-## 요약
-
-| 구성 요소       | 기술 스택            | 설명 |
-|----------------|---------------------|------|
-| API 서버        | RESTful API (Spring Boot) | 인증, 송금, 룰 등록 등 |
-| 비동기 처리      | Apache Kafka         | 송금 이벤트 스트리밍 |
-| 캐시/선차감 처리  | Redis                | 실시간 잔액 확인, TTL 기반 상태 보존 |
-| 트랜잭션 저장     | PostgreSQL/MySQL     | 정합성 있는 거래 기록 저장 |
-| 알림/대시보드    | WebSocket + Slack    | 실시간 탐지 결과 전달 |
-| 복구/보정 처리   | DLQ + Worker         | 장애 발생 시 TTL + 보정 |
-
-## 기술 스택
-- Language: Java
-- Framework: Spring Boot 3.x (REST, Kafka, WebSocket)
-- Message Queue: Apache Kafka
-- Database: PostgreSQL / MySQL
-- Cache: Redis (Lua Script, TTL)
-- WebSocket: Spring WebSocket / STOMP
-- Frontend: React (Admin UI)
-- Infra: Docker, Docker Compose, Slack Webhook
-
----
-
-## 로그인 
+## 로그인
 ```mermaid
 sequenceDiagram
     participant Client as 사용자(Client)
@@ -46,6 +14,7 @@ sequenceDiagram
     TokenVerifier-->>API: 유효 / 무효 응답
     API-->>Client: 요청 처리 결과
 ```
+---
 
 ## 송금 요청 및 트랜잭션
 ```mermaid
@@ -79,6 +48,8 @@ sequenceDiagram
 > UX를 위해 빠르게 응답을 주되, 실제 송금 처리는 비동기로 넘깁니다. <br/>
 서버 리소스를 블로킹하지 않고 처리량을 확장할 수 있습니다.
 
+---
+
 ## TxWorker 처리 + 실패 시 DLQ emit
 ```mermaid
 sequenceDiagram
@@ -90,8 +61,9 @@ sequenceDiagram
     participant DLQ as DLQ
 
     Kafka->>TxWorker: consume transfer.initiated
-    TxWorker->>RDB: INSERT INTO tx (status=PENDING)
+    TxWorker->>RDB: INSERT INTO tx (PENDING)
     alt INSERT 성공
+        TxWorker->>Redis: SET tx:{txId}:status = PENDING EX 600
         TxWorker->>Kafka: emit transfer.created
     else INSERT 실패
         TxWorker->>Redis: INCRBY 복원
@@ -103,13 +75,14 @@ sequenceDiagram
 - 설명:
     - TxWorker는 Kafka로부터 `transfer.initiated` 이벤트를 수신한 뒤, 해당 거래를 RDB에 `PENDING` 상태로 기록합니다.
     - 이 과정에서 DB 삽입이 실패할 경우, 다음과 같은 복구 절차가 순차적으로 수행됩니다.
-      1. Redis에서 사용자 잔액을 복원 (`INCRBY`)
-      2. `tx.sync_required` 이벤트를 DLQ로 발행하여 보정 처리 대상임을 명시
-      3. 운영 Slack에 장애 알림을 전송하여 운영자가 즉시 인지할 수 있도록 합니다.
+        1. Redis에서 사용자 잔액을 복원 (`INCRBY`)
+        2. `tx.sync_required` 이벤트를 DLQ로 발행하여 보정 처리 대상임을 명시
+        3. 운영 Slack에 장애 알림을 전송하여 운영자가 즉시 인지할 수 있도록 합니다.
 
 > RDB insert는 대체로 성공하지만, 네트워크 단절, DB pool 초과 등으로 실패할 경우 **금전 정합성 문제가 발생할 수 있습니다.**  
 > 이를 대비해 **자동 복구 루틴 + 운영 알림 체계**를 구성하여, **손실 없이 보정 가능한 구조**입니다.
 
+---
 ## 룰 수정 및 반영 흐름 (Admin Console에서 룰 수정 → RiskEval 동기화 흐름 추가)
 ```mermaid
 sequenceDiagram
@@ -138,6 +111,7 @@ sequenceDiagram
 > **탐지 민감도 조절, 새로운 패턴 추가, 일시적 허용 등 운영 대응력을 허용합니다.**  
 > 정적 룰 시스템이 아니라 **동적으로 구성 가능한 Rule Engine 구조**입니다.
 
+---
 ##  Tx 상태 변경시 tx_history 기록 흐름 추가
 ```mermaid
 sequenceDiagram
@@ -156,6 +130,7 @@ sequenceDiagram
     - tx_history 에는 `txId`, 변경된 `status`, `timestamp`가 포함되며,  
       모든 상태 변경은 별도로 기록되어 **이상 탐지, 운영 분석, VOC 대응, 회계 정산 등의 근거 자료로 활용**됩니다.
 
+---
 ## RiskEval 판단 기준 명확화 + 상태 emit
 ```mermaid
 sequenceDiagram
@@ -191,6 +166,7 @@ sequenceDiagram
 > 정적 룰 기반 탐지의 장점(명확함)과 AI 기반 이상도 판단의 장점(학습 기반)을 결합하여,  
 > **탐지 민감도와 유연성을 모두 확보한 하이브리드 Risk 평가 시스템**입니다.
 
+---
 ## Fallback 처리 흐름 강화: TTL 키 + 중복 체크 포함
 ```mermaid
 sequenceDiagram
@@ -204,7 +180,7 @@ sequenceDiagram
     SyncWorker->>RDB: txId 존재 확인
     alt tx 미존재
         SyncWorker->>RDB: INSERT 복구 트랜잭션
-        SyncWorker->>Redis: SET tx:{txId}:status = COMPLETED (TTL 10m)
+        SyncWorker->>Redis: SET tx:{txId}:status = COMPLETED EX 600
         SyncWorker->>RDB: INSERT INTO correction_log
         SyncWorker->>Slack: 복구 성공 알림
     else 중복
@@ -230,13 +206,3 @@ sequenceDiagram
 
 > 복구 대상이 이미 존재한다면, 해당 트랜잭션은 "중복"으로 간주되며 Slack으로 무시 알림만 전송되고, **재처리는 일절 하지 않습니다.**
 > 실패한 트랜잭션도 절대 유실되지 않도록 보장하며, **자동 복구 + 상태 키 TTL + 이력 로깅 + 알림**까지 포함된 Failsafe 구조입니다.
-
-## Kafka 토픽 구성 요약
-
-| 토픽 이름                | 발행자                | 소비자                     | 설명                |
-| -------------------- | ------------------ | ----------------------- | ----------------- |
-| `transfer.initiated` | `transfer-service` | `tx-worker`             | 송금 요청 이벤트         |
-| `transfer.created`   | `tx-worker`        | `risk-eval`             | 트랜잭션 성공 생성        |
-| `transfer.approved`  | `risk-eval`        | TxStatusUpdater, Admin UI | 이상 없음 / 거래 완료 처리 |
-| `transfer.flagged`   | `risk-eval`        | WebSocket, Slack, Admin | 이상 탐지됨            |
-| `tx.sync_required`   | `tx-worker`        | `sync-worker`           | RDB 삽입 실패 시 보정 필요 |
