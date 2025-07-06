@@ -3,21 +3,41 @@
 !define primary_key(x) <b>x</b>
 !define foreign_key(x) <i>x</i>
 
+' === 테이블 정의 ===
 table(users) {
     primary_key(id): UUID
     name: string
     email: string
     created_at: datetime
+    -- UNIQUE(email)
+}
+
+table(account_balances) {
+    primary_key(user_id): UUID
+    balance: bigint
+    updated_at: datetime
+}
+
+table(admin_users) {
+    primary_key(id): UUID
+    username: string
+    email: string
+    role: string
+    created_at: datetime
+    -- UNIQUE(username)
+    -- UNIQUE(email)
 }
 
 table(transactions) {
     primary_key(id): UUID
     foreign_key(user_id): UUID
-    receiver_id: UUID
+    foreign_key(receiver_id): UUID
     amount: bigint
     status: string
     created_at: datetime
     -- INDEX(user_id, created_at DESC)
+    -- INDEX(receiver_id)
+    -- INDEX(amount DESC)
     -- INDEX(status)
 }
 
@@ -27,7 +47,7 @@ table(tx_history) {
     prev_status: string
     next_status: string
     changed_at: datetime
-    changed_by: string
+    foreign_key(changed_by): UUID
     -- INDEX(tx_id)
 }
 
@@ -36,7 +56,7 @@ table(correction_log) {
     foreign_key(tx_id): UUID
     amount: bigint
     restored_at: datetime
-    restored_by: string
+    foreign_key(restored_by): UUID
     reason: string
     -- UNIQUE(tx_id)
 }
@@ -51,6 +71,18 @@ table(rules) {
     -- UNIQUE(rule_name)
 }
 
+table(rule_history) {
+    primary_key(id): UUID
+    foreign_key(rule_id): UUID
+    version: int
+    condition_json: json
+    threshold: int
+    foreign_key(created_by): UUID
+    created_at: datetime
+    -- UNIQUE(rule_id, version)
+    -- INDEX(rule_id, created_at DESC)
+}
+
 table(risk_logs) {
     primary_key(id): UUID
     foreign_key(tx_id): UUID
@@ -62,8 +94,40 @@ table(risk_logs) {
     -- INDEX(final_decision)
 }
 
+table(risk_rule_hits) {
+    primary_key(id): UUID
+    foreign_key(risk_log_id): UUID
+    foreign_key(rule_id): UUID
+    hit: boolean
+    score: float
+    -- INDEX(rule_id)
+    -- INDEX(risk_log_id)
+}
+
+table(dlq_events) {
+    primary_key(id): UUID
+    foreign_key(tx_id): UUID
+    component: string
+    error_message: string
+    received_at: datetime
+    resolved: boolean
+    resolved_at: datetime
+    -- INDEX(tx_id)
+}
+
+' === 관계 정의 ===
 users ||--o{ transactions : owns
+users ||--o{ transactions : receives
+users ||--|| account_balances : owns_balance
 transactions ||--o{ tx_history : logs
 transactions ||--o{ correction_log : restores
 transactions ||--o{ risk_logs : evaluates
+transactions ||--o{ dlq_events : failed_in
+risk_logs ||--o{ risk_rule_hits : rules_applied
+rules ||--o{ rule_history : has_versions
+rules ||--o{ risk_rule_hits : triggered_by
+admin_users ||--o{ tx_history : modified_by
+admin_users ||--o{ correction_log : corrected_by
+admin_users ||--o{ rule_history : created_by
+admin_users ||--o{ rule_history : created_by
 @enduml

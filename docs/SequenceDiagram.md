@@ -64,7 +64,7 @@ sequenceDiagram
     TxWorker->>RDB: INSERT INTO tx (PENDING)
     alt INSERT 성공
         TxWorker->>Redis: SET tx:{txId}:status = PENDING EX 600
-        TxWorker->>Kafka: emit transfer.created
+        TxWorker->>Kafka: emit transfer.created { txId, userId, traceId }
     else INSERT 실패
         TxWorker->>Redis: INCRBY 복원
         TxWorker->>DLQ: emit tx.sync_required
@@ -95,7 +95,7 @@ sequenceDiagram
     RuleAPI->>RuleStore: 룰 저장
     RuleAPI-->>AdminUI: 저장 완료 응답
 
-    Note over RiskEval: 주기적으로 룰 fetch or 구독
+    Note over RiskEval: 룰 fetch 는 주기적 GET 또는 Pub/Sub (Redis Stream, Kafka compacted topic 등)
     RiskEval->>RuleStore: GET /rules
     RuleStore-->>RiskEval: 최신 룰 리스트
 ```
@@ -145,9 +145,10 @@ sequenceDiagram
         RiskEval->>Kafka: emit transfer.flagged
         Kafka->>WS: consume transfer.flagged
         WS-->>Admin: 실시간 알림 전송
-        RiskEval->>Slack: 이상 거래 탐지 알림
+        RiskEval->>Slack: [ALERT] Suspicious Tx (txId: abc123, amount: ₩3,200,000, user: 4567, score: 0.92)
     else
         RiskEval->>Kafka: emit transfer.approved
+        RiskEval->>RDB: INSERT INTO risk_logs (txId, decision: APPROVED, aiScore, ruleHit=false)
     end
 ```
 
@@ -180,7 +181,9 @@ sequenceDiagram
     SyncWorker->>RDB: txId 존재 확인
     alt tx 미존재
         SyncWorker->>RDB: INSERT 복구 트랜잭션
-        SyncWorker->>Redis: SET tx:{txId}:status = COMPLETED EX 600
+
+    SyncWorker->>Redis: SET tx:{txId}:status = COMPLETED EX 600
+    Note right of Redis: SET tx:{txId}:source = syncworker
         SyncWorker->>RDB: INSERT INTO correction_log
         SyncWorker->>Slack: 복구 성공 알림
     else 중복

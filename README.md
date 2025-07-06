@@ -9,7 +9,6 @@ Kafka 기반 이벤트 스트리밍과 Redis 캐시, Rule/AI 기반 이상 거�
 
 ## 요약
 - [SequenceDiagram](docs/SequenceDiagram.md)
-- [ERD](docs/ERD.puml)
 - [INFRA](docs/infra.puml)
 
 | 구성 요소       | 기술 스택            | 설명 |
@@ -32,6 +31,33 @@ Kafka 기반 이벤트 스트리밍과 Redis 캐시, Rule/AI 기반 이상 거�
 - Infra: Docker, Docker Compose, Slack Webhook
 
 ---
+
+## ERD
+- [hot-link](docs/ERD.puml)
+
+| 테이블명                  | 역할 / 목적              | 주요 컬럼 설명                                                                                                                              |
+|-----------------------|----------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| **`users`**           | 일반 사용자 정보 관리         | - `id`: 유저 식별자 (UUID)<br> - `email`: 로그인/계정 기준<br> - `created_at`: 가입 일자                                                              |
+| **`account_balance`** | 사용자 계좌               | - `id`: 유저 식별자 (UUID)<br> -  `balance`: 잔액<br/> - `updated_at`: 변경 일자                                                                 |
+| **`admin_users`**     | 운영자 계정 및 권한 관리       | - `username`, `email`: 로그인/담당자 구분용<br> - `role`: 권한 (e.g., admin, auditor)                                                            |
+| **`transactions`**    | 송금 요청 기록 (기본 트랜잭션)   | - `user_id`: 보낸 사람<br> - `receiver_id`: 받은 사람<br> - `amount`, `status`: 금액 및 처리 상태<br> - `created_at`: 요청 시간                          |
+| **`tx_history`**      | 트랜잭션 상태 변경 로그        | - `tx_id`: 어떤 트랜잭션인지<br> - `prev_status → next_status`: 상태 변화 내역 (e.g., `PENDING → FAILED`)<br> - `changed_by`: 운영자 ID                |
+| **`correction_log`**  | 트랜잭션 복구/보정 기록        | - `tx_id`: 보정 대상 트랜잭션<br> - `amount`: 보정된 금액<br> - `restored_by`: 복구한 운영자<br> - `reason`: 사유                                          |
+| **`rules`**           | 현재 적용 중인 탐지 룰        | - `rule_name`: 고유 이름<br> - `condition_json`: 룰 조건 (JSON 형식)<br> - `threshold`: 임계값<br> - `enabled`: 활성화 여부                            |
+| **`rule_history`**    | 룰 버전 이력 관리           | - `rule_id`: 어떤 룰인지<br> - `version`: 버전 번호<br> - `created_by`: 등록자<br> - `condition_json`: 그 당시 룰 조건                                  |
+| **`risk_logs`**       | 단건 트랜잭션에 대한 탐지 결과    | - `tx_id`: 어떤 트랜잭션인지<br> - `rule_hit`: 룰 감지 여부<br> - `ai_score`: AI 탐지 점수<br> - `final_decision`: 최종 판단 (e.g., `APPROVED`, `BLOCKED`) |
+| **`risk_rule_hits`**  | 어떤 룰이 탐지에 영향을 줬는지    | - `risk_log_id`: 탐지 로그 참조<br> - `rule_id`: 해당 룰<br> - `hit`: 조건 만족 여부<br> - `score`: 룰 기반 평가 점수                                       |
+| **`dlq_events`**      | 장애 발생 트랜잭션 기록 (DLQ용) | - `tx_id`: 실패한 트랜잭션<br> - `component`: 실패 위치 (e.g., `TxWorker`, `RiskEval`)<br> - `error_message`: 상세 에러<br> - `resolved`: 복구 여부      |
+
+## Admin Role
+| Role 이름        | 설명                  | 권한 예시                 |
+| -------------- | ------------------- | --------------------- |
+| `SUPER_ADMIN`  | 최상위 관리자 (시스템 전체 제어) | 모든 룰 수정, 복구 승인, 계정 관리 |
+| `RULE_ADMIN`   | 룰 편집 권한 담당          | 탐지 룰 등록/수정/삭제 가능      |
+| `AUDITOR`      | 감사/이력 열람 전용         | 조회만 가능, 수정 불가         |
+| `OPS_AGENT`    | 운영 담당자              | 이상 거래 알림 확인, 복구 승인    |
+| `RISK_ANALYST` | 이상 탐지 분석자           | 탐지 결과 열람, 룰 개선 제안 가능  |
+| `READ_ONLY`    | 테스트 또는 관찰 계정        | 모든 데이터 열람만 가능         |
 
 ## Kafka 토픽 구성 요약
 
