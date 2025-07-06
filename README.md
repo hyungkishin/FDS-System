@@ -9,7 +9,8 @@ Kafka 기반 이벤트 스트리밍과 Redis 캐시, Rule/AI 기반 이상 거�
 
 ## 요약
 - [SequenceDiagram](docs/SequenceDiagram.md)
-- [ERD](docs/ERD.md)
+- [ERD](docs/ERD.puml)
+- [INFRA](docs/infra.puml)
 
 | 구성 요소       | 기술 스택            | 설명 |
 |----------------|---------------------|------|
