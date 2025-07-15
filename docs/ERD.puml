@@ -31,12 +31,12 @@ table(admin_users) {
 table(transactions) {
     primary_key(id): UUID
     foreign_key(user_id): UUID
-    foreign_key(receiver_id): UUID
+    foreign_key(sender_id): UUID
     amount: bigint
     status: string
     created_at: datetime
     -- INDEX(user_id, created_at DESC)
-    -- INDEX(receiver_id)
+    -- INDEX(sender)
     -- INDEX(amount DESC)
     -- INDEX(status)
 }
