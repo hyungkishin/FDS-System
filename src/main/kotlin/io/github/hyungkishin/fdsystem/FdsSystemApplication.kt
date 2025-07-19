@@ -1,4 +1,4 @@
-package com.my.fds
+package io.github.hyungkishin.fdsystem
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication

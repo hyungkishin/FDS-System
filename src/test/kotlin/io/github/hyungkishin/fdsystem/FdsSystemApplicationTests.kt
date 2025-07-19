@@ -1,4 +1,4 @@
-package com.my.fds
+package io.github.hyungkishin.fdsystem
 
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest

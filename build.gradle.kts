@@ -1,5 +1,4 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import org.gradle.testing.jacoco.tasks.JacocoReport
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 
 plugins {
@@ -9,10 +8,10 @@ plugins {
     kotlin("kapt") version "1.9.24"
     id("org.springframework.boot") version "3.5.3"
     id("io.spring.dependency-management") version "1.1.7"
-    id("jacoco")
+    id("jacoco") // 코드 커버리지 측정
 }
 
-group = "com.my"
+group = "io.github.hyungkishin"
 version = "0.0.1-SNAPSHOT"
 
 java {
@@ -38,7 +37,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// Kotlin 컴파일 옵션
+// Kotlin 컴파일 설정
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         freeCompilerArgs += "-Xjsr305=strict"
@@ -51,12 +50,12 @@ tasks.test {
     finalizedBy("jacocoTestReport") // 테스트 후 커버리지 자동 실행
 }
 
-// Jacoco 버전 명시
+// Jacoco 기본 설정
 jacoco {
     toolVersion = "0.8.11"
 }
 
-// 공통 exclude 규칙
+// 공통 exclude 규칙 (커버리지 테스트 대상에서 제외할 클래스 패턴)
 val excludes = listOf(
     "**/*Application*",
     "**/*Dto*",
@@ -66,36 +65,11 @@ val excludes = listOf(
     "**/*Exception*",
     "**/*Constants*",
     "**/*Interceptor*",
-    "**/Q*.*",          // QueryDSL
-    "**/*DtoKt*"        // Kotlin Dto companion object
+    "**/Q*.*", // QueryDSL 자동 생성 클래스
+    "**/*DtoKt*" // Kotlin Dto companion object
 )
 
-// 커버리지 리포트 생성 태스크
-tasks.named<JacocoReport>("jacocoTestReport") {
-    dependsOn(tasks.test)
-
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-        csv.required.set(false)
-        html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco/html"))
-    }
-
-    classDirectories.setFrom(
-        files(classDirectories.files.map {
-            fileTree(it) {
-                exclude(excludes)
-            }
-        })
-    )
-
-    sourceDirectories.setFrom(files("src/main/kotlin"))
-    executionData.setFrom(
-        fileTree(layout.buildDirectory).include("/jacoco/test.exec")
-    )
-}
-
-// 커버리지 기준 검증 태스크
+// 커버리지 기준 검증 설정 (JacocoViolation) - 커버리지 미달 시 빌드 실패
 tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.test)
 
@@ -103,14 +77,14 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
         rule {
             enabled = true
 
-            // LINE 커버리지 기준
+            // 라인 커버리지 기준: 80% 이상
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
                 minimum = "0.80".toBigDecimal()
             }
 
-            // BRANCH 커버리지 기준
+            // 분기문 커버리지 기준: 70% 이상
             limit {
                 counter = "BRANCH"
                 value = "COVEREDRATIO"
@@ -127,19 +101,18 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
         })
     )
     sourceDirectories.setFrom(files("src/main/kotlin"))
-    executionData.setFrom(
-        fileTree(layout.buildDirectory).include("/jacoco/test.exec")
-    )
+    executionData.setFrom(fileTree(layout.buildDirectory).include("/jacoco/test.exec"))
 }
 
-// testCoverage: 전체 실행 태스크
+
+// testCoverage: 테스트 / 커버리지 리포트 / 검증을 포함한 태스크
 tasks.register("testCoverage") {
     group = "verification"
     description = "Run tests, generate report, verify coverage"
     dependsOn("test", "jacocoTestReport", "jacocoTestCoverageVerification")
 }
 
-// check 태스크에 통합
+// check 태스크에 통합 (TODO: CI에서 사용 될 기본 태스크)
 tasks.named("check") {
     dependsOn("testCoverage")
 }

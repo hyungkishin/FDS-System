@@ -1,1 +1,1 @@
-rootProject.name = "my"
+rootProject.name = "fds-system"
