@@ -4,10 +4,12 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 
 @SpringBootTest
-class FdsSystemApplication {
+class FdsSystemApplicationKtTest {
 
     @Test
     fun contextLoads() {
         println("Spring context loaded successfully.")
     }
+
 }
+
