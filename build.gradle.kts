@@ -8,6 +8,7 @@ plugins {
     id("org.springframework.boot") version "3.5.3"
     id("io.spring.dependency-management") version "1.1.7"
     id("jacoco")
+    id("org.sonarqube") version "4.4.1.3373" // SonarQube 연동 (품질 분석)
 }
 
 group = "io.github.hyungkishin"
@@ -105,9 +106,34 @@ tasks.register("testCoverage") {
     tasks["jacocoTestCoverageVerification"].mustRunAfter("jacocoTestReport")
 }
 
-// check 시 coverage 실행 (CI에서만 실행되도록 옵션화)
+// check 시 coverage 실행 옵션 ( CI에서만 실행되도록 )
 if (System.getenv("CI") == "true" || project.hasProperty("enableCoverage")) {
     tasks.named("check") {
         dependsOn("testCoverage")
+    }
+}
+
+sonar {
+    properties {
+        // SonarQube 가 중복 컴파일을 실행하지 않도록 방지 (Gradle 8+ deprecation 대응)
+        property("sonar.gradle.skipCompile", "true")
+        property("sonar.projectKey", "f-lab-edu_FDS-System")
+        property("sonar.organization", "f-lab-edu")
+        property("sonar.host.url", "https://sonarcloud.io")
+        property("sonar.login", System.getenv("SONAR_TOKEN"))
+
+        // 소스 코드 및 바이너리 경로
+        property("sonar.sources", "src/main/kotlin")
+        property("sonar.tests", "src/test/kotlin")
+        property("sonar.java.binaries", layout.buildDirectory.get().asFile.resolve("classes").toString())
+
+        // 커버리지 경로 (정확한 위치로)
+        property("sonar.coverage.jacoco.xmlReportPaths", layout.buildDirectory.get().asFile
+            .resolve("reports/jacoco/test/jacocoTestReport.xml")
+            .toString()
+        )
+
+        // 분석에서 제외할 코드 (Jacoco 와 동일한 패턴 사용)
+        property("sonar.exclusions", sonarExcludePatterns.joinToString(SONAR_EXCLUSION_DELIMITER))
     }
 }

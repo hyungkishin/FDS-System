@@ -20,7 +20,27 @@ val jacocoExcludePatterns = listOf(
     "**/Q*.class"                 // QueryDSL Q 클래스
 )
 
+/**
+ * Jacoco 에서 사용할 분석 대상 FileTree 반환 함수
+ */
 fun Project.jacocoClassDirs(): FileTree =
     fileTree(layout.buildDirectory.dir("classes/kotlin/main").get().asFile) {
         exclude(jacocoExcludePatterns)
     }
+
+/**
+ * SonarQube에서 사용할 exclude 소스 경로 목록
+ * (".class" -> ".kt" 변환, 구조 경로로 변경)
+ */
+val sonarExcludePatterns: List<String> = jacocoExcludePatterns
+    .mapNotNull { pattern ->
+        val ktPattern = when {
+            pattern.endsWith(".class") -> pattern.replace(".class", ".kt")
+            pattern.contains("/Q*")     -> pattern.replace("/Q*", "/Q*.kt")
+            else                        -> null
+        }
+        ktPattern?.let { "src/main/kotlin/$it" }
+    }
+    .distinct()
+
+const val SONAR_EXCLUSION_DELIMITER = ", "

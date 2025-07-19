@@ -1,4 +1,4 @@
-name: Test Coverage
+name: Jacoco Coverage Report
 
 on:
   pull_request:
