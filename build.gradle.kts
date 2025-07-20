@@ -128,6 +128,7 @@ sonar {
             mutableListOf("build/reports/jacoco/test/jacocoTestReport.xml")
         )
 
+        property("sonar.login", System.getenv("SONAR_TOKEN"))
         property(
             "sonar.test.exclusions", sonarExcludePatterns.toMutableList()
         )
