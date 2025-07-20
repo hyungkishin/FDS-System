@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"  # 루트 gradle 기준
+    schedule:
+      interval: "daily"
