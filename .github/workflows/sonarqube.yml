@@ -39,6 +39,6 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run SonarQube analysis
-        run: ./gradlew sonarqube --no-daemon
+        run: ./gradlew sonar --no-daemon
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
