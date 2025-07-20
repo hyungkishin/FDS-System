@@ -1,47 +1,65 @@
 @startuml
+' 정의
 !define table(x) class x << (T,#FFAAAA) >>
 !define primary_key(x) <b>x</b>
 !define foreign_key(x) <i>x</i>
 
-' === 테이블 정의 ===
-table(users) {
+skinparam linetype ortho
+hide circle
+
+' ==============================
+' 도메인: 사용자
+' ==============================
+package "User Domain" #EFEFEF {
+  table(users) {
     primary_key(id): UUID
     name: string
     email: string
     created_at: datetime
     -- UNIQUE(email)
-}
+  }
 
-table(account_balances) {
+  table(account_balances) {
     primary_key(user_id): UUID
     balance: bigint
     updated_at: datetime
+  }
 }
 
-table(admin_users) {
+users ||--|| account_balances : owns_balance
+
+' ==============================
+' 도메인: 관리자
+' ==============================
+package "Admin Domain" #FFF5E1 {
+  table(admin_users) {
     primary_key(id): UUID
     username: string
     email: string
-    role: string
+    role: string <<enum: ADMIN, AUDITOR>>
     created_at: datetime
     -- UNIQUE(username)
     -- UNIQUE(email)
+  }
 }
 
-table(transactions) {
+' ==============================
+' 도메인: 송금 및 정정
+' ==============================
+package "Transaction Domain" #E1F5FE {
+  table(transactions) {
     primary_key(id): UUID
-    foreign_key(user_id): UUID
-    foreign_key(sender_id): UUID
+    foreign_key(sender_user_id): UUID
+    foreign_key(receiver_user_id): UUID
     amount: bigint
-    status: string
+    status: string <<enum: PENDING, COMPLETED, FAILED, CORRECTED>>
     created_at: datetime
-    -- INDEX(user_id, created_at DESC)
-    -- INDEX(sender)
-    -- INDEX(amount DESC)
-    -- INDEX(status)
-}
+    -- INDEX(sender_user_id)
+    -- INDEX(receiver_user_id)
+    -- INDEX(created_at DESC)
+  }
 
-table(tx_history) {
+  table(tx_history) {
     primary_key(id): UUID
     foreign_key(tx_id): UUID
     prev_status: string
@@ -49,9 +67,9 @@ table(tx_history) {
     changed_at: datetime
     foreign_key(changed_by): UUID
     -- INDEX(tx_id)
-}
+  }
 
-table(correction_log) {
+  table(correction_log) {
     primary_key(id): UUID
     foreign_key(tx_id): UUID
     amount: bigint
@@ -59,19 +77,53 @@ table(correction_log) {
     foreign_key(restored_by): UUID
     reason: string
     -- UNIQUE(tx_id)
+  }
 }
 
-table(rules) {
+users ||--o{ transactions : sends
+users ||--o{ transactions : receives
+
+transactions ||--o{ tx_history : has_status_log
+transactions ||--o{ correction_log : has_correction
+admin_users ||--o{ tx_history : modified_by
+admin_users ||--o{ correction_log : corrected_by
+
+' ==============================
+' 도메인: 이상 거래 탐지
+' ==============================
+package "Risk Detection Domain" #F1F8E9 {
+  table(risk_logs) {
+    primary_key(id): UUID
+    foreign_key(tx_id): UUID
+    rule_hit: boolean
+    ai_score: float
+    final_decision: string <<enum: PASS, REVIEW, BLOCK>>
+    evaluated_at: datetime
+    -- INDEX(tx_id)
+    -- INDEX(final_decision)
+  }
+
+  table(risk_rule_hits) {
+    primary_key(id): UUID
+    foreign_key(risk_log_id): UUID
+    foreign_key(rule_id): UUID
+    hit: boolean
+    score: float
+    -- INDEX(rule_id)
+    -- INDEX(risk_log_id)
+  }
+
+  table(rules) {
     primary_key(id): UUID
     rule_name: string
-    condition_json: json
+    condition_json: json <<JSON DSL: {"amount_gt":1000000} >>
     threshold: int
     enabled: boolean
     created_at: datetime
     -- UNIQUE(rule_name)
-}
+  }
 
-table(rule_history) {
+  table(rule_history) {
     primary_key(id): UUID
     foreign_key(rule_id): UUID
     version: int
@@ -81,30 +133,21 @@ table(rule_history) {
     created_at: datetime
     -- UNIQUE(rule_id, version)
     -- INDEX(rule_id, created_at DESC)
+  }
 }
 
-table(risk_logs) {
-    primary_key(id): UUID
-    foreign_key(tx_id): UUID
-    rule_hit: boolean
-    ai_score: float
-    final_decision: string
-    evaluated_at: datetime
-    -- INDEX(tx_id)
-    -- INDEX(final_decision)
-}
+transactions --> risk_logs : evaluated_by
+risk_logs --> risk_rule_hits : hit_detail
+risk_logs --> rule_history : applied_version
+rules ||--o{ rule_history : versioned
+rules ||--o{ risk_rule_hits : matched_rule
+admin_users ||--o{ rule_history : created_by
 
-table(risk_rule_hits) {
-    primary_key(id): UUID
-    foreign_key(risk_log_id): UUID
-    foreign_key(rule_id): UUID
-    hit: boolean
-    score: float
-    -- INDEX(rule_id)
-    -- INDEX(risk_log_id)
-}
-
-table(dlq_events) {
+' ==============================
+' 도메인: Infra / 장애
+' ==============================
+package "Infra / DLQ Domain" #FCE4EC {
+  table(dlq_events) {
     primary_key(id): UUID
     foreign_key(tx_id): UUID
     component: string
@@ -113,21 +156,9 @@ table(dlq_events) {
     resolved: boolean
     resolved_at: datetime
     -- INDEX(tx_id)
+  }
 }
 
-' === 관계 정의 ===
-users ||--o{ transactions : owns
-users ||--o{ transactions : receives
-users ||--|| account_balances : owns_balance
-transactions ||--o{ tx_history : logs
-transactions ||--o{ correction_log : restores
-transactions ||--o{ risk_logs : evaluates
-transactions ||--o{ dlq_events : failed_in
-risk_logs ||--o{ risk_rule_hits : rules_applied
-rules ||--o{ rule_history : has_versions
-rules ||--o{ risk_rule_hits : triggered_by
-admin_users ||--o{ tx_history : modified_by
-admin_users ||--o{ correction_log : corrected_by
-admin_users ||--o{ rule_history : created_by
-admin_users ||--o{ rule_history : created_by
+transactions ||--o{ dlq_events : error_occurred
+
 @enduml
