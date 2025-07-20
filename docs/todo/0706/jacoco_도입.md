@@ -215,3 +215,58 @@ Jacoco는 테스트 실행 시 코드 커버리지를 추적하기 위해 다음
 > 
 > Gradle + Jacoco에서 올바른 실행 순서는 다음과 같다.  
 > test -> jacocoTestReport -> jacocoTestCoverageVerification
+
+
+## github Actions 연동
+
+```yaml
+name: Jacoco Coverage Report
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      # GitHub 저장소 소스코드 체크아웃
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Gradle 캐시 적용 (빌드 속도 향상)
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # JDK 21 설치 (Temurin: 안정적이고 무료 오픈 JDK)
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # gradlew 실행 권한 부여 (Linux 기반 환경에서는 필수)
+      - name: Grant execute permission
+        run: chmod +x ./gradlew
+
+      # 테스트 + 커버리지 리포트 생성 + 검증 (testCoverage task 실행)
+      - name: Run tests with coverage
+        run: ./gradlew testCoverage --no-daemon --stacktrace
+
+      # Jacoco HTML 리포트를 GitHub Artifacts에 업로드
+      - name: Upload HTML Jacoco Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-html
+          path: build/reports/jacoco/html/
+
+```

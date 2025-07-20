@@ -32,15 +32,12 @@ fun Project.jacocoClassDirs(): FileTree =
  * SonarQube에서 사용할 exclude 소스 경로 목록
  * (".class" -> ".kt" 변환, 구조 경로로 변경)
  */
-val sonarExcludePatterns: List<String> = jacocoExcludePatterns
-    .mapNotNull { pattern ->
-        val ktPattern = when {
-            pattern.endsWith(".class") -> pattern.replace(".class", ".kt")
-            pattern.contains("/Q*")     -> pattern.replace("/Q*", "/Q*.kt")
-            else                        -> null
-        }
-        ktPattern?.let { "src/main/kotlin/$it" }
+val sonarExcludePatterns: List<String> = jacocoExcludePatterns.mapNotNull {
+    when {
+        it.endsWith(".class") -> it.replace(".class", ".kt")
+        it.contains("/Q*") -> it.replace("/Q*", "/Q*.kt")
+        else -> null
     }
-    .distinct()
+}
 
 const val SONAR_EXCLUSION_DELIMITER = ", "
