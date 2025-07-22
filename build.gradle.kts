@@ -113,7 +113,7 @@ if (System.getenv("CI") == "true" || project.hasProperty("enableCoverage")) {
     }
 }
 
-sonar {
+sonarqube {
     properties {
         property("sonar.gradle.skipCompile", "true")
         property("sonar.projectKey", "f-lab-edu_FDS-System")
