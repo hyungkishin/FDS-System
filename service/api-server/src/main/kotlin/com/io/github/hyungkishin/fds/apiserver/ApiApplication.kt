@@ -1,11 +1,11 @@
-package io.github.hyungkishin.fdsystem
+package com.io.github.hyungkishin.fds.apiserver
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class FdsSystemApplication
+class ApiApplication
 
 fun main(args: Array<String>) {
-    runApplication<FdsSystemApplication>(*args)
+    runApplication<ApiApplication>(*args)
 }
