@@ -1,5 +1,5 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("org.springframework.boot") version "3.3.2" apply false
@@ -20,6 +20,12 @@ allprojects {
     }
 }
 
+// coverage 정책 정의
+object CoveragePolicy {
+    val line = 0.80.toBigDecimal()
+    val branch = 0.70.toBigDecimal()
+}
+
 subprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "org.jetbrains.kotlin.plugin.spring")
@@ -29,26 +35,22 @@ subprojects {
     apply(plugin = "io.spring.dependency-management")
     apply(plugin = "jacoco")
 
-    // 실행 가능한 모듈만 boot 적용
     if (name in listOf("api-server")) {
         apply(plugin = "org.springframework.boot")
     }
 
-    // BOM
     configure<DependencyManagementExtension> {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:3.3.2")
         }
     }
 
-    // Java toolchain 설정
     extensions.configure<JavaPluginExtension> {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(21))
         }
     }
 
-    // Kotlin 컴파일러 설정
     tasks.withType<KotlinCompile>().configureEach {
         kotlinOptions {
             freeCompilerArgs += "-Xjsr305=strict"
@@ -56,12 +58,10 @@ subprojects {
         }
     }
 
-    // 테스트 설정
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
     }
 
-    // 공통 의존성
     dependencies {
         add("implementation", "org.jetbrains.kotlin:kotlin-stdlib-jdk8")
         add("implementation", "org.jetbrains.kotlin:kotlin-reflect")
@@ -69,4 +69,59 @@ subprojects {
         add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
     }
 
+    if (name in listOf("core-transfer", "infra-rdb")) {
+        tasks.named<JacocoReport>("jacocoTestReport") {
+            dependsOn(tasks.named<Test>("test"))
+            finalizedBy("jacocoTestCoverageVerification") // 리포트 생성 후 검증 실행
+
+            classDirectories.setFrom(files(jacocoClassDirs()))
+            sourceDirectories.setFrom(project.layout.projectDirectory.dir("src/main/kotlin"))
+            executionData.setFrom(fileTree(layout.buildDirectory).include("/jacoco/test.exec"))
+
+            reports {
+                xml.required.set(true)
+                html.required.set(true)
+            }
+        }
+
+        tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+            classDirectories.setFrom(files(jacocoClassDirs()))
+            sourceDirectories.setFrom(project.layout.projectDirectory.dir("src/main/kotlin"))
+            executionData.setFrom(fileTree(layout.buildDirectory).include("/jacoco/test.exec"))
+
+            violationRules {
+                rule {
+                    enabled = true
+                    element = "BUNDLE"
+                    limit {
+                        counter = "LINE"
+                        value = "COVEREDRATIO"
+                        minimum = CoveragePolicy.line
+                    }
+                    limit {
+                        counter = "BRANCH"
+                        value = "COVEREDRATIO"
+                        minimum = CoveragePolicy.branch
+                    }
+                }
+            }
+        }
+
+        // test + report + verify를 순차 실행하는 task
+        tasks.register("testCoverage") {
+            group = "verification"
+            description = "Run tests, generate report, and verify coverage"
+
+            dependsOn("test", "jacocoTestReport", "jacocoTestCoverageVerification")
+            tasks["jacocoTestReport"].mustRunAfter("test")
+            tasks["jacocoTestCoverageVerification"].mustRunAfter("jacocoTestReport")
+        }
+    }
+
+    // check 시 coverage 실행 옵션 ( CI에서만 실행되도록 )
+    if (System.getenv("CI") == "true" || project.hasProperty("enableCoverage")) {
+        tasks.named("check") {
+            dependsOn("testCoverage")
+        }
+    }
 }
