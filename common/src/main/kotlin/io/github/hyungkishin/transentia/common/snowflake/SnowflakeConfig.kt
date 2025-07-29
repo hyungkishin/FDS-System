@@ -1,4 +1,4 @@
-package io.github.hyungkishin.fds.common.snowflake
+package io.github.hyungkishin.transentia.common.snowflake
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties

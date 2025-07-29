@@ -1,4 +1,4 @@
-package io.github.hyungkishin.fds.common.snowflake
+package io.github.hyungkishin.transentia.common.snowflake
 
 class Snowflake(
     private val nodeId: Long,

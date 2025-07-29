@@ -1,4 +1,4 @@
-package com.io.github.hyungkishin.fds.api
+package com.io.github.hyungkishin.transentia.api
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
