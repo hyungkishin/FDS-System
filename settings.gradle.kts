@@ -1,12 +1,20 @@
-rootProject.name = "fds-system"
+rootProject.name = "transentia"
 
-listOf(
-    "common",
-    "api-server",
-    "infra-rdb",
-    "core-transfer"
-    // auth, core-transfer, infra-kafka, infra-redis, infra-rdb, txworker, syncworker, detector
-).forEach {
-    include(it)
-    project(":$it").projectDir = File("$rootDir/service/$it")
+val services = listOf(
+    "transfer",
+//    "wallet",
+//    "fds"
+)
+
+services.forEach { service ->
+    listOf("domain", "application", "infra", "api").forEach { layer ->
+        val name = "$service-$layer"
+        include(name)
+        project(":$name").projectDir = file("services/$service/$layer")
+    }
 }
+
+
+// 공통 유틸
+include("common")
+project(":common").projectDir = file("common")

@@ -1,53 +1,66 @@
-## common 
-- 공통 타입, 유틸, 예외 정의
+## 1. api-server
 
-> 어떤 모듈에서도 의존할 수 있도록 Spring 없이, 순수 Kotlin으로 유지  
-> Ex: Money, UserId, ErrorResponse, DomainException
+- Spring Boot 애플리케이션 실행 진입점
+- REST Controller 진입점 (e.g. `TransferController`)
+- 클라이언트 요청 처리 및 UseCase 호출
+- SnowflakeIdGenerator를 주입받아 TransferId 생성
+- Config 클래스에서 Bean 조립
+    - `TransferServiceConfig`
+    - `@Import(JpaRepositoryConfig::class, SnowflakeConfig::class)`
+- 의존 모듈:
+    - `core-transfer`
+    - `infra-rdb`
+    - `infra-event`
+    - `common`
 
-## core-transfer
-- 도메인 로직 (송금 규칙, 정책, 서비스) 담당
-- Spring에 의존하지 않는 순수한 비즈니스 계층
-- Presentation (api-server)에서만 이걸 사용
+---
 
-> TransferService, TransferCommand, TransferResult
+## 2. core-transfer
 
-## infra-rdb
-- DB 연동을 위한 Spring + JPA 구성
-- Entity, Repository, Datasource config 포함
-- 도메인에서는 이 모듈을 모르고, 상위 모듈( api-server )만 사용
+- 도메인 및 유스케이스 모듈
+- 도메인 모델:
+    - `Transfer`, `TxStatus`, `TransferId`, `TransferCommand`, `TransferResult`
+- 유스케이스:
+    - `TransferUseCase` (Port)
+    - `TransferService` (Spring 모름)
+- 포트 인터페이스:
+    - `TransferRepository`
+    - `TransferEventPublisher`
+- 도메인 이벤트:
+    - `TransferCompletedEvent`
 
-## 
+---
 
-```text
-fds-system/
-├── api-server
-│   └── Presentation Layer (HTTP Controller)
-│   └── Depends on: core-transfer, event-handler, common
-│
-├── core-transfer
-│   └── Business Logic for transfer
-│   └── Define TransferEventPublisher interface
-│   └── Depends on: common
-│
-├── event-handler    // Kafka 없이 이벤트 처리
-│   └── Implements TransferEventPublisher
-│   └── Event 후속 처리 로직 (e.g audit log)
-│   └── Depends on: common
-│
-├── common
-│   └── DTO, Event 객체 정의
+## 3. infra-rdb
 
-```
+- 영속성(RDB) 어댑터 모듈
+- JPA Entity: `Transaction`
+- Repository 구현체: `TransferJpaAdapter` (implements `TransferRepository`)
+- Spring Data JPA 인터페이스: `TransferJpaRepository`
+- 설정 클래스:
+    - `JpaRepositoryConfig.kt`  
+      → `@EnableJpaRepositories(basePackages = [...])`
 
-```text
-[api-server]
-↓
-[core-transfer]  ←─ TransferEventPublisher Interface 정의
-↓                     ↑
-[TransferCompletedEvent]  │
-↓                     │
-[event-handler] ──────────┘ 구현체에서 후속 처리
-```
+---
 
-> Kafka 도입 시 event-handler 내부 구현만 교체   
-> Publish -> KafkaProducer, Consume -> KafkaListener
+## 4. infra-event
+
+- 이벤트 발행 어댑터 모듈
+- 구현체:
+    - `TransferEventLoggingAdapter` (implements `TransferEventPublisher`)
+- 현재는 로그 기반, 추후 Kafka 등으로 확장 가능
+
+---
+
+## 5. common
+
+- 공통 유틸리티 모듈
+- Snowflake 기반 전역 유일 ID 생성기:
+    - `Snowflake`
+    - `SnowflakeIdGenerator`
+- ID 래퍼 클래스:
+    - `TransferId`
+- Spring 설정:
+    - `SnowflakeProperties` (`@ConfigurationProperties`)
+    - `SnowflakeConfig` (`@Configuration`, `@Bean` 등록용)
+

@@ -34,8 +34,8 @@ out/
 /.nb-gradle/
 
 .idea/
-/service/build/
-/service/**/build/
+/services/transfer/build/
+/services/transfer/**/build/
 
 ### VS Code ###
 .vscode/

@@ -6,9 +6,10 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core-transfer"))
-    implementation(project(":infra-rdb"))
     implementation(project(":common"))
+    implementation(project(":transfer-application"))
+    implementation(project(":transfer-domain"))
+    implementation(project(":transfer-infra"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -19,5 +20,5 @@ dependencies {
 }
 
 tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
-    mainClass.set("com.api.ApiApplication")
+    mainClass.set("com.api.TransferApiApplication")
 }
