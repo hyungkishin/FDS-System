@@ -1,4 +1,4 @@
-package com.io.github.hyungkishin.transentia.api
+package com.io.github.hyungkishin.transentia.common
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication

@@ -42,6 +42,7 @@ subprojects {
     configure<DependencyManagementExtension> {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:3.3.2")
+            mavenBom("io.kotest:kotest-bom:5.8.0")
         }
     }
 
@@ -60,6 +61,10 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        testLogging {
+            events("passed", "failed", "skipped")
+            showStandardStreams = true
+        }
     }
 
     dependencies {
@@ -67,6 +72,8 @@ subprojects {
         add("implementation", "org.jetbrains.kotlin:kotlin-reflect")
         add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
         add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
+        add("testImplementation", "io.kotest:kotest-runner-junit5")
+        add("testImplementation", "io.kotest:kotest-assertions-core")
     }
 
     if (name in listOf("core-transfer", "infra-rdb")) {
