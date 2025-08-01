@@ -7,8 +7,11 @@ plugins {
 dependencies {
     implementation(project(":transfer-application"))
     implementation(project(":transfer-domain"))
+    implementation(project(":common"))
 
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("jakarta.persistence:jakarta.persistence-api")
-    implementation("org.springframework.boot:spring-boot-starter")
+
+    runtimeOnly("org.postgresql:postgresql")
 }

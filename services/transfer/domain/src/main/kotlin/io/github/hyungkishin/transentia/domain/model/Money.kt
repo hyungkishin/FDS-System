@@ -5,11 +5,10 @@ package io.github.hyungkishin.transentia.domain.model
  *
  * - SCALE = 8 고정 소수점 기반 Long 값으로 구성됨
  * - 음수 금액은 생성 및 연산 불가
- * - 외부에서는 fromDecimalString()으로만 생성 가능
- * - 연산은 도메인 내부 모듈에서만 가능 (internal)
+ * - 외부에서는 fromDecimalString()으로만 생성할 것
  */
 @JvmInline
-value class Money private constructor(private val rawValue: Long) : Comparable<Money> {
+value class Money private constructor(val rawValue: Long) : Comparable<Money> {
 
     companion object {
         private const val SCALE = 8
@@ -32,15 +31,15 @@ value class Money private constructor(private val rawValue: Long) : Comparable<M
         }
 
         /**
-         * 내부 계산/DB 복원 시에만 사용하는 생성자
+         * [infra] 또는 [test] 계층에서 DB 복원/변환 시 사용 가능.
          */
-        internal fun fromRawValue(raw: Long): Money {
+        fun fromRawValue(raw: Long): Money {
             require(raw >= 0L) { "금액은 음수일 수 없습니다." }
             return Money(raw)
         }
     }
 
-    /** 내부에서만 사용 가능한 연산자 메서드들 **/
+    // 내부 도메인에서만 사용하는 연산자들
     internal fun add(other: Money): Money =
         fromRawValue(this.rawValue + other.rawValue)
 
