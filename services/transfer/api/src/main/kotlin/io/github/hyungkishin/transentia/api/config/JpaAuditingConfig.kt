@@ -1,4 +1,4 @@
-package com.io.github.hyungkishin.transentia.config
+package io.github.hyungkishin.transentia.api.config
 
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing

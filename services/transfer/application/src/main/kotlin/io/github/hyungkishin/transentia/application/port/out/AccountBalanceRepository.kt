@@ -1,4 +1,4 @@
-package io.github.hyungkishin.transentia.application.port
+package io.github.hyungkishin.transentia.application.port.out
 
 import io.github.hyungkishin.transentia.common.snowflake.UserId
 import io.github.hyungkishin.transentia.domain.model.AccountBalance

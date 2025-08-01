@@ -14,7 +14,7 @@ import java.time.LocalDateTime
 class TransactionJpaEntity(
 
     @Id
-    val id: Long, // ID는 도메인에서 Snowflake로 생성되므로. JPA는 생성 하지 않는다.
+    val id: Long, // ID는 도메인에서 Snowflake로 생성되므로. JPA는 생성하지 않는다.
 
     @Column(nullable = false)
     val senderUserId: Long,
@@ -27,11 +27,12 @@ class TransactionJpaEntity(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val status: TransactionStatus,
+    var status: TransactionStatus,
 
     val receivedAt: LocalDateTime? = null
 
 ) : BaseEntity() {
+
     fun toDomain(): Transaction = Transaction.request(
         transactionId = TransferId(id),
         senderUserId = UserId(senderUserId),
@@ -42,7 +43,9 @@ class TransactionJpaEntity(
             TransactionStatus.COMPLETED -> complete(receivedAt ?: createdAt)
             TransactionStatus.FAILED -> fail()
             TransactionStatus.CORRECTED -> correct()
-            else -> error("Unknown status: $status")
+            TransactionStatus.PENDING -> {
+                // do nothing, 그대로 PENDING 상태 유지
+            }
         }
     }
 
@@ -57,5 +60,5 @@ class TransactionJpaEntity(
                 receivedAt = domain.receivedAt
             )
     }
-
 }
+
