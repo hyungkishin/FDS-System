@@ -1,9 +1,24 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
 rootProject.name = "transentia"
 
 val services = listOf(
     "transfer",
-//    "wallet",
-//    "fds"
+    // "wallet",
+    // "fds"
 )
 
 services.forEach { service ->
@@ -14,7 +29,5 @@ services.forEach { service ->
     }
 }
 
-
-// 공통 유틸
 include("common")
 project(":common").projectDir = file("common")

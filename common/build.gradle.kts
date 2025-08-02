@@ -3,6 +3,6 @@ plugins {
 }
 
 dependencies {
-    implementation(kotlin("stdlib"))
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.0")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 }
