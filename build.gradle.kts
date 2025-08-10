@@ -20,8 +20,9 @@ val kotlinVersion = "1.9.25"
 val bootApps      = setOf("transfer-api")
 val springModules = setOf("transfer-api", "transfer-infra", "delivery-http-starter")
 val jpaModules    = setOf("transfer-infra")
-val pureKotlinModules = setOf(
-    "shared-domain-error", "common", // or shared-kernel
+
+val pureKotlinModules = setOf( // TODO 정리
+    "shared-domain-error", "shared-kernel",
     "transfer-domain", "transfer-application"
 )
 
