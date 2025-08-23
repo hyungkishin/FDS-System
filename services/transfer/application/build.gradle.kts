@@ -5,8 +5,8 @@ plugins {
 
 dependencies {
     implementation(project(":transfer-domain"))
-    implementation(project(":shared-kernel"))
-    implementation(project(":shared-domain-error"))
+    implementation(project(":delivery-http-error"))
+    implementation(project(":shared-common"))
 
     implementation("org.springframework:spring-context")
     implementation("org.springframework:spring-tx")

@@ -1,8 +1,8 @@
 package io.github.hyungkishin.transentia.domain.model
 
-import io.github.hyungkishin.transentia.shared.error.CommonError
-import io.github.hyungkishin.transentia.shared.error.DomainException
-import io.github.hyungkishin.transentia.shared.snowflake.UserId
+import io.github.hyungkishin.transentia.common.error.CommonError
+import io.github.hyungkishin.transentia.common.error.DomainException
+import io.github.hyungkishin.transentia.common.snowflake.UserId
 
 class AccountBalance private constructor(
     val userId: UserId,

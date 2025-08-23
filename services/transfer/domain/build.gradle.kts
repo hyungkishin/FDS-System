@@ -3,6 +3,5 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared-kernel"))
-    implementation(project(":shared-domain-error"))
+    implementation(project(":shared-common"))
 }

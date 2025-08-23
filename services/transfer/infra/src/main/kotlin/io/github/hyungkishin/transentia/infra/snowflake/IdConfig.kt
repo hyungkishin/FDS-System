@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.infra.snowflake
 
-import io.github.hyungkishin.transentia.shared.snowflake.IdGenerator
+import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

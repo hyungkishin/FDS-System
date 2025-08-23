@@ -16,29 +16,27 @@ version = "0.0.1-SNAPSHOT"
 
 val kotlinVersion = "1.9.25"
 
-// 모듈 성격 정의(필요시 이름 수정)
-val bootApps      = setOf("transfer-api")
-val springModules = setOf("transfer-api", "transfer-infra", "delivery-http-starter")
-val jpaModules    = setOf("transfer-infra")
+// 실행 가능한 Spring Boot 앱 모듈
+val bootApps = setOf("transfer-api", "transfer-publisher", "transfer-consumer")
+// Spring 관련 플러그인 필요한 모듈
+val springModules =
+    setOf("transfer-api", "transfer-publisher", "transfer-consumer", "transfer-infra", "delivery-http-error")
 
-val pureKotlinModules = setOf( // TODO 정리
-    "shared-domain-error", "shared-kernel",
-    "transfer-domain", "transfer-application"
-)
+// JPA 필요한 모듈
+val jpaModules = setOf("transfer-infra")
+
+// 순수 Kotlin 모듈
+val pureKotlinModules = setOf("shared-common", "transfer-domain", "transfer-application")
 
 val kspModules = emptySet<String>() // ksp 쓰는 모듈 있으면 이름 추가
-
-allprojects {
-    repositories { mavenCentral() }
-}
 
 subprojects {
 
     // 공통: Kotlin/JVM
     apply(plugin = "org.jetbrains.kotlin.jvm")
 
-    // Spring 관련 플러그인은 springModules 에만
-    if (name in springModules) {
+    // Spring 관련 플러그인은 springModules + bootApps에 적용
+    if (name in springModules || name in bootApps) {
         apply(plugin = "org.jetbrains.kotlin.plugin.spring")
         apply(plugin = "org.jetbrains.kotlin.plugin.allopen")
         // @Transactional 등 proxy 대상 자동 open
@@ -63,6 +61,7 @@ subprojects {
     // Boot 애플리케이션 모듈만 spring-boot 플러그인
     if (name in bootApps) {
         apply(plugin = "org.springframework.boot")
+        apply(plugin = "io.spring.dependency-management")
     } else {
         // 나머지는 BOM만 사용
         apply(plugin = "io.spring.dependency-management")

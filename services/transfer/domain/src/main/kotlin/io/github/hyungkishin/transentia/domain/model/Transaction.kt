@@ -1,33 +1,33 @@
 package io.github.hyungkishin.transentia.domain.model
 
-import io.github.hyungkishin.transentia.shared.snowflake.TransferId
-import io.github.hyungkishin.transentia.shared.snowflake.UserId
-import io.github.hyungkishin.transentia.domain.common.enums.TransactionStatus
+import io.github.hyungkishin.transentia.common.snowflake.TransferId
+import io.github.hyungkishin.transentia.common.snowflake.UserId
+import io.github.hyungkishin.transentia.domain.enums.TransactionStatus
+import io.github.hyungkishin.transentia.domain.event.TransferCompletedEvent
+import io.github.hyungkishin.transentia.domain.event.TransferFailedEvent
 import java.time.LocalDateTime
 
-// TODO : 왜 Data class 는 안될까 ? -> 고민
 class Transaction private constructor(
     val id: TransferId,
     val senderUserId: UserId,
     val receiverUserId: UserId,
     val amount: Money,
     var status: TransactionStatus,
-    val createdAt: LocalDateTime,
-    var receivedAt: LocalDateTime? = null
+    var createdAt: LocalDateTime,
+    var failReason: String? = null,
 ) {
 
     companion object {
-        fun of(
-            transactionId: TransferId,
+        fun start(
+            id: TransferId,
             senderUserId: UserId,
             receiverUserId: UserId,
             amount: Money
         ): Transaction {
             require(senderUserId != receiverUserId) { "송신자와 수신자는 동일할 수 없습니다." }
             require(amount.isPositive()) { "송금 금액은 0보다 커야 합니다." }
-
             return Transaction(
-                id = transactionId,
+                id = id,
                 senderUserId = senderUserId,
                 receiverUserId = receiverUserId,
                 amount = amount,
@@ -37,23 +37,19 @@ class Transaction private constructor(
         }
     }
 
-    fun complete(receivedAt: LocalDateTime = LocalDateTime.now()) {
+    fun complete(): TransferCompletedEvent {
         check(status == TransactionStatus.PENDING) { "PENDING 상태만 완료할 수 있습니다." }
         status = TransactionStatus.COMPLETED
-        this.receivedAt = receivedAt
+        createdAt = LocalDateTime.now()
+        return TransferCompletedEvent(id, senderUserId, receiverUserId, amount, createdAt)
     }
 
-    fun fail(reason: String? = null) {
+    fun fail(reason: String): TransferFailedEvent {
         check(status == TransactionStatus.PENDING) { "PENDING 상태만 실패 처리할 수 있습니다." }
         status = TransactionStatus.FAILED
-        // TODO: 실패 사유 로그를 남기려면 별도 도메인 이벤트/로그 필요
+        failReason = reason
+        createdAt = LocalDateTime.now()
+        return TransferFailedEvent(id, reason, createdAt)
     }
 
-    fun correct() {
-        check(status == TransactionStatus.COMPLETED || status == TransactionStatus.FAILED) {
-            "정정은 완료되었거나 실패된 상태에서만 가능합니다."
-        }
-        status = TransactionStatus.CORRECTED
-    }
 }
-

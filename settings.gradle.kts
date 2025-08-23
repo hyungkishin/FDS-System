@@ -7,9 +7,12 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
     repositories {
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
 }
 
@@ -21,20 +24,26 @@ val services = listOf(
     // "fds"
 )
 
+// 계층 모듈 (domain, application, infra)
 services.forEach { service ->
-    listOf("domain", "application", "infra", "api").forEach { layer ->
+    listOf("domain", "application", "infra").forEach { layer ->
         val name = "$service-$layer"
         include(name)
         project(":$name").projectDir = file("services/$service/$layer")
     }
 }
 
-include("shared-kernel")
-project(":shared-kernel").projectDir = file("common/shared-kernel")
+// 실행 모듈 (boot/*)
+services.forEach { service ->
+    listOf("api", "publisher", "consumer").forEach { app ->
+        val name = "$service-$app"
+        include(name)
+        project(":$name").projectDir = file("services/$service/instances/$app")
+    }
+}
 
+include("delivery-http-error")
+project(":delivery-http-error").projectDir = file("common/delivery-http-error")
 
-include("delivery-http-starter")
-project(":delivery-http-starter").projectDir = file("common/delivery-http-starter")
-
-include("shared-domain-error")
-project(":shared-domain-error").projectDir = file("common/shared-domain-error")
+include("shared-common")
+project(":shared-common").projectDir = file("common/shared-common")

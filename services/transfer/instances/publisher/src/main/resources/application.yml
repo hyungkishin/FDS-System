@@ -1,0 +1,45 @@
+server:
+  port: 8081  # actuator 열 계획 없으면 굳이 필요 없음
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transfer
+    username: postgres
+    password: pass1234
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+
+  kafka:
+    bootstrap-servers: localhost:9094   # ← 호스트에서 실행 시 compose의 EXTERNAL(9094) 사용
+    producer:
+      acks: all
+      enable-idempotence: true
+      retries: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    properties:
+      # 필요시 배치 성능 파라미터
+      linger.ms: 10
+      batch.size: 16384
+
+# 퍼블리셔 운영 파라미터 (커스텀)
+publisher:
+  poll:
+    fixed-delay-ms: 500      # 0.5초 주기
+    batch-size: 100          # 1회 배치 크기
+  topic:
+    default: transfer-events # 기본 토픽명
+    # routes:                # (옵션) aggregateType별 라우팅
+    #   TRANSFER: transfer-events
+    #   ACCOUNT: account-events
+
+logging:
+  level:
+    root: INFO
+    "io.github.hyungkishin": DEBUG

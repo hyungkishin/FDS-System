@@ -34,6 +34,8 @@ value class Money private constructor(val rawValue: Long) : Comparable<Money> {
         }
     }
 
+    val minor: Long get() = rawValue
+
     // 도메인 규칙에 의해 잔액 검사는 밖에서 하고, 순수 연산만 진행한다
     internal fun add(other: Money): Money {
         // overflow guard
