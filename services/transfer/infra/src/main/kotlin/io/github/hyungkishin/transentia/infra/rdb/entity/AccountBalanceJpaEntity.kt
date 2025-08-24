@@ -1,8 +1,8 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 import io.github.hyungkishin.transentia.common.snowflake.UserId
-import io.github.hyungkishin.transentia.domain.model.AccountBalance
-import io.github.hyungkishin.transentia.domain.model.Money
+import io.github.hyungkishin.transentia.consumer.model.AccountBalance
+import io.github.hyungkishin.transentia.consumer.model.Money
 import io.github.hyungkishin.transentia.infra.config.BaseEntity
 import jakarta.persistence.*
 import org.hibernate.Hibernate

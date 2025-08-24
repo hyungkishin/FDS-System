@@ -1,6 +1,5 @@
 package io.github.hyungkishin.transentia.consumer.model
 
-import io.github.hyungkishin.transentia.domain.model.Money
 import io.kotest.assertions.throwables.shouldThrowExactly
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe

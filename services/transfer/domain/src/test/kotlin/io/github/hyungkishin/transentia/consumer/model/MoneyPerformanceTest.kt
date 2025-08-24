@@ -1,6 +1,5 @@
 package io.github.hyungkishin.transentia.consumer.model
 
-import io.github.hyungkishin.transentia.domain.model.Money
 import io.kotest.core.spec.style.StringSpec
 import org.junit.jupiter.api.Disabled
 import java.math.BigDecimal

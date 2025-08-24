@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.infra.rdb.adapter
 
-import io.github.hyungkishin.transentia.application.port.out.adapter.TransactionRepository
-import io.github.hyungkishin.transentia.domain.model.Transaction
+import io.github.hyungkishin.transentia.application.required.TransactionRepository
+import io.github.hyungkishin.transentia.consumer.model.Transaction
 import io.github.hyungkishin.transentia.infra.rdb.entity.TransactionJpaEntity
 import io.github.hyungkishin.transentia.infra.rdb.repository.TransactionJpaRepository
 import org.springframework.stereotype.Component

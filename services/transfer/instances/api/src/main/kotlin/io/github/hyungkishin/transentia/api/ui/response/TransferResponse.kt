@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.api.ui.response
 
-import io.github.hyungkishin.transentia.application.port.out.command.TransferResponseCommand
+import io.github.hyungkishin.transentia.application.required.command.TransferResponseCommand
 import java.time.LocalDateTime
 
 data class TransferResponse(

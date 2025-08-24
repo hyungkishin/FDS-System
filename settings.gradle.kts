@@ -20,8 +20,7 @@ rootProject.name = "transentia"
 
 val services = listOf(
     "transfer",
-    // "wallet",
-    // "fds"
+     "fds"
 )
 
 // 계층 모듈 (domain, application, infra)
@@ -34,13 +33,11 @@ services.forEach { service ->
 }
 
 // 실행 모듈 (boot/*)
-services.forEach { service ->
-    listOf("api", "publisher", "consumer").forEach { app ->
-        val name = "$service-$app"
-        include(name)
-        project(":$name").projectDir = file("services/$service/instances/$app")
-    }
-}
+include("transfer-api")
+project(":transfer-api").projectDir = file("services/transfer/instances/api")
+
+include("fds-consumer")
+project(":fds-consumer").projectDir = file("services/fds/instances/consumer")
 
 include("delivery-http-error")
 project(":delivery-http-error").projectDir = file("common/delivery-http-error")

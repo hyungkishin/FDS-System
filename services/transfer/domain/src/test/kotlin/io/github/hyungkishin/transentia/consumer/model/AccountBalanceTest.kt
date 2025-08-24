@@ -2,8 +2,6 @@ package io.github.hyungkishin.transentia.consumer.model
 
 import io.github.hyungkishin.transentia.common.error.DomainException
 import io.github.hyungkishin.transentia.common.snowflake.UserId
-import io.github.hyungkishin.transentia.domain.model.AccountBalance
-import io.github.hyungkishin.transentia.domain.model.Money
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 

@@ -2,7 +2,7 @@ package io.github.hyungkishin.transentia.api.ui
 
 import io.github.hyungkishin.transentia.api.ui.request.TransferRequest
 import io.github.hyungkishin.transentia.api.ui.response.TransferResponse
-import io.github.hyungkishin.transentia.application.port.`in`.services.TransferService
+import io.github.hyungkishin.transentia.application.provided.TransactionRegister
 import jakarta.validation.Valid
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.*
@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/transfers")
 class TransferController(
-    private val transferService: TransferService
+    private val registerTransaction: TransactionRegister
 ) {
 
     /**
@@ -26,7 +26,7 @@ class TransferController(
 //        idem: String,
         @Valid @RequestBody request: TransferRequest
     ): TransferResponse {
-        val result = transferService.create(request.toCommand())
+        val result = registerTransaction.create(request.toCommand())
         return TransferResponse.of(result)
     }
 
@@ -35,7 +35,7 @@ class TransferController(
      */
     @GetMapping("/{transactionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun get(@PathVariable transactionId: Long): TransferResponse {
-        val res = transferService.get(transactionId)
+        val res = registerTransaction.get(transactionId)
         return TransferResponse.of(res)
     }
 

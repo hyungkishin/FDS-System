@@ -2,9 +2,9 @@ package io.github.hyungkishin.transentia.infra.rdb.entity
 
 import io.github.hyungkishin.transentia.common.snowflake.TransferId
 import io.github.hyungkishin.transentia.common.snowflake.UserId
-import io.github.hyungkishin.transentia.domain.enums.TransactionStatus
-import io.github.hyungkishin.transentia.domain.model.Money
-import io.github.hyungkishin.transentia.domain.model.Transaction
+import io.github.hyungkishin.transentia.consumer.enums.TransactionStatus
+import io.github.hyungkishin.transentia.consumer.model.Money
+import io.github.hyungkishin.transentia.consumer.model.Transaction
 import io.github.hyungkishin.transentia.infra.config.BaseEntity
 import jakarta.persistence.*
 import org.hibernate.Hibernate
