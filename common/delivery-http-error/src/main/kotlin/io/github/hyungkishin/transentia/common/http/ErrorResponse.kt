@@ -7,5 +7,6 @@ data class ErrorResponse(
     val code: String,
     val message: String,
     val detail: String? = null,
-    val additionalInfo: Map<String, Any?>? = null
+    val additionalInfo: Map<String, Any?>? = null,
+    val traceId: String? = null,
 )
