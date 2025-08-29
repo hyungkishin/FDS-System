@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     implementation(project(":shared-common"))
+    implementation(project(":fds-infra"))
 
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.kafka:spring-kafka")

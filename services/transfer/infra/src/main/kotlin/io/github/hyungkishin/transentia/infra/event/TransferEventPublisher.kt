@@ -4,6 +4,9 @@ import io.github.hyungkishin.transentia.application.required.event.EventPublishe
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 
+/**
+ * @see KafkaAfterCommitForwarder
+ */
 @Component
 class TransferEventPublisher(
     private val delegate: ApplicationEventPublisher

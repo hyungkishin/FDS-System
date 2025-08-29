@@ -8,13 +8,15 @@ import org.springframework.stereotype.Component
 @Component
 class TransferEventListener {
 
+    init { println("### TransferEventListener bean created") }
+
     @KafkaListener(
         topics = ["transfer.completed"],
         groupId = "fds-consumer",
         containerFactory = "kafkaListenerContainerFactory"
     )
     fun onCompleted(event: TransferCompletedV1) {
-        println("✅ [FDS] Transfer Completed Event 수신: $event")
+        println("[FDS] Transfer Completed Event 수신: $event")
         // TODO: Application 계층 서비스 호출 (AnalyzeTransferService)
     }
 
@@ -24,7 +26,7 @@ class TransferEventListener {
         containerFactory = "kafkaListenerContainerFactory"
     )
     fun onFailed(event: TransferFailedV1) {
-        println("❌ [FDS] Transfer Failed Event 수신: $event")
+        println("[FDS] Transfer Failed Event 수신: $event")
         // TODO: 실패 트랜잭션 분석 or 리스크 로그 기록
     }
 }

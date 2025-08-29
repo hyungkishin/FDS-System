@@ -16,15 +16,15 @@ class TransactionHistoryService(
     private val idGenerator: IdGenerator,
 ) : TransactionHistoryRegister {
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     override fun recordSuccess(transaction: Transaction) {
-        val history = TransactionHistory.Companion.successOf(transaction, TransactionId(idGenerator.nextId()))
+        val history = TransactionHistory.successOf(transaction, TransactionId(idGenerator.nextId()))
         transactionHistoryRepository.save(history)
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     override fun recordFail(transaction: Transaction, reason: String?) {
-        val history = TransactionHistory.Companion.failOf(transaction, TransactionId(idGenerator.nextId()), reason)
+        val history = TransactionHistory.failOf(transaction, TransactionId(idGenerator.nextId()), reason)
         transactionHistoryRepository.save(history)
     }
 

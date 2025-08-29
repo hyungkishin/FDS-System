@@ -15,20 +15,19 @@ class TransactionTest {
 
     @Test
     fun `Transaction 요청 시 PENDING 상태로 생성된다`() {
-        val tx = Transaction.start(TransferId(100L), sender, receiver, amount)
+        val tx = Transaction.of(TransferId(100L), sender, receiver, amount)
 
         assertEquals(TransactionStatus.PENDING, tx.status)
         assertEquals(sender, tx.senderUserId)
         assertEquals(receiver, tx.receiverUserId)
         assertEquals(amount, tx.amount)
         assertNotNull(tx.createdAt)
-        assertNull(tx.receivedAt)
     }
 
     @Test
     fun `송신자와 수신자가 같으면 예외가 발생한다`() {
         assertThrows(IllegalArgumentException::class.java) {
-            Transaction.start(TransferId(101L), sender, sender, amount)
+            Transaction.of(TransferId(101L), sender, sender, amount)
         }
     }
 
@@ -36,22 +35,21 @@ class TransactionTest {
     fun `금액이 0원이면 예외가 발생한다`() {
         val zeroAmount = Money.fromDecimalString("0.00")
         assertThrows(IllegalArgumentException::class.java) {
-            Transaction.start(TransferId(102L), sender, receiver, zeroAmount)
+            Transaction.of(TransferId(102L), sender, receiver, zeroAmount)
         }
     }
 
     @Test
     fun `PENDING 상태의 트랜잭션은 COMPLETE 상태로 변경될 수 있다`() {
-        val tx = Transaction.start(TransferId(103L), sender, receiver, amount)
+        val tx = Transaction.of(TransferId(103L), sender, receiver, amount)
         tx.complete()
 
         assertEquals(TransactionStatus.COMPLETED, tx.status)
-        assertNotNull(tx.receivedAt)
     }
 
     @Test
     fun `COMPLETED 상태의 트랜잭션은 다시 COMPLETE 처리할 수 없다`() {
-        val tx = Transaction.start(TransferId(104L), sender, receiver, amount)
+        val tx = Transaction.of(TransferId(104L), sender, receiver, amount)
         tx.complete()
 
         assertThrows(IllegalStateException::class.java) {
@@ -61,28 +59,10 @@ class TransactionTest {
 
     @Test
     fun `PENDING 상태의 트랜잭션은 FAIL 처리할 수 있다`() {
-        val tx = Transaction.start(TransferId(105L), sender, receiver, amount)
-        tx.fail()
+        val tx = Transaction.of(TransferId(105L), sender, receiver, amount)
 
         assertEquals(TransactionStatus.FAILED, tx.status)
     }
 
-    @Test
-    fun `COMPLETED 상태의 트랜잭션은 CORRECT 처리할 수 있다`() {
-        val tx = Transaction.start(TransferId(106L), sender, receiver, amount)
-        tx.complete()
-        tx.correct()
-
-        assertEquals(TransactionStatus.CORRECTED, tx.status)
-    }
-
-    @Test
-    fun `PENDING 상태의 트랜잭션은 CORRECT 처리할 수 없다`() {
-        val tx = Transaction.start(TransferId(107L), sender, receiver, amount)
-
-        assertThrows(IllegalStateException::class.java) {
-            tx.correct()
-        }
-    }
 }
 

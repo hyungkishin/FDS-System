@@ -51,7 +51,7 @@ class TransactionJpaEntity(
     override fun isNew(): Boolean = (version == null)
 
     fun toDomain(): Transaction =
-        Transaction.start(
+        Transaction.of(
             id = TransferId(id),
             senderUserId = UserId(senderUserId),
             receiverUserId = UserId(receiverUserId),

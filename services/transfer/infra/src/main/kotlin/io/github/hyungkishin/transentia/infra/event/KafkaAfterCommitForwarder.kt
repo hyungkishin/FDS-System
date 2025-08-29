@@ -21,6 +21,11 @@ class KafkaAfterCommitForwarder(
     fun on(e: TransferCompletedEvent) {
         val c = e.toContract()
         kafkaTemplate.send("transfer.completed", c.txId.toString(), c)
+
+        // Kafka Infra (= 사용측면에서 내부 운영 방침과 동작방식 사례 - 지인 찬스 )
+        // Topic partition, key ( header 가 어떤 목적으로 key value 가 설정되는지, )
+        // 파티션(설계) 에 따라 Consumer 가 몇대가 될지
+        // Header 에 어떤 값이 있어야 하는지
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

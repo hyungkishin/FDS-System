@@ -37,7 +37,7 @@ class TransactionService(
                 "수신자 계좌 정보를 찾을 수 없습니다. userId=${command.receiverUserId()}"
             )
 
-        val transfer = Transaction.Companion.start(
+        val transfer = Transaction.of(
             TransferId(idGenerator.nextId()), sender.userId, receiver.userId, command.amount()
         )
 
@@ -47,22 +47,18 @@ class TransactionService(
 
             accountBalanceRepository.save(sender)
             accountBalanceRepository.save(receiver)
-            transactionHistoryService.recordSuccess(transfer)
 
-            eventPublisher.publish(
-                transfer.complete()
-            )
+            val saved = transactionRepository.save(transfer)
+            transactionHistoryService.recordSuccess(saved)
 
-        } catch (ex: Exception) {
+            eventPublisher.publish(saved.complete())
+
+            return TransferResponseCommand.from(saved)
+        } catch (ex: RuntimeException) {
             transactionHistoryService.recordFail(transfer, ex.message)
-            eventPublisher.publish(
-                transfer.fail(ex.message ?: "UNKNOWN_ERROR")
-            )
+            eventPublisher.publish(transfer.fail(ex.message ?: "SYSTEM_ERROR"))
             throw ex
         }
-
-        val saved = transactionRepository.save(transfer)
-        return TransferResponseCommand.Companion.from(saved)
     }
 
     override fun get(transactionId: Long): TransferResponseCommand {
@@ -73,4 +69,5 @@ class TransactionService(
             )
         return TransferResponseCommand.Companion.from(tx)
     }
+
 }

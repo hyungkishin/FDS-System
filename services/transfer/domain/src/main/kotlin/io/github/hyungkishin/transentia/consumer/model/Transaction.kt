@@ -19,7 +19,7 @@ class Transaction private constructor(
 
     companion object {
 
-        fun start(
+        fun of(
             id: TransferId,
             senderUserId: UserId,
             receiverUserId: UserId,
