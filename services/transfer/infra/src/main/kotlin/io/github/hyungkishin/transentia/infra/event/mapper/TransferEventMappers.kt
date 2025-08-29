@@ -6,13 +6,13 @@ import io.github.hyungkishin.transentia.consumer.event.TransferCompletedEvent
 import io.github.hyungkishin.transentia.consumer.event.TransferFailedEvent
 
 fun TransferCompletedEvent.toContract() = TransferCompletedV1(
-    txId = transactionId.value,
-    senderUserId = senderUserId.value,
-    receiverUserId = receiverUserId.value,
+    txId = snowFlakeId.value,
+    senderUserId = senderSnowFlakeId.value,
+    receiverUserId = receiverSnowFlakeId.value,
     amountMinor = amount.rawValue,
 )
 
 fun TransferFailedEvent.toContract() = TransferFailedV1(
-    txId = transactionId.value,
+    txId = snowFlakeId.value,
     reason = reason
 )

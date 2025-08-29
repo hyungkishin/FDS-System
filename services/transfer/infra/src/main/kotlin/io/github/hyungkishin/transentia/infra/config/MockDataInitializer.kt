@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.infra.config
 
 import io.github.hyungkishin.transentia.application.required.AccountBalanceRepository
-import io.github.hyungkishin.transentia.common.snowflake.UserId
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.consumer.model.AccountBalance
 import io.github.hyungkishin.transentia.consumer.model.Money
 import org.springframework.boot.CommandLineRunner
@@ -16,12 +16,20 @@ class MockDataInitializer(
 ) : CommandLineRunner {
 
     override fun run(vararg args: String?) {
-        if (accountBalanceRepository.findByUserId(UserId(10001)) == null) {
+        if (accountBalanceRepository.findByUserId(SnowFlakeId(10001)) == null) {
 
-             // = 1000원
-             // = 5만원
-            val sender = AccountBalance.initialize(UserId(10001), Money.fromDecimalString("10000.00000000"))
-            val receiver = AccountBalance.initialize(UserId(20002), Money.fromDecimalString("50000.00000000"))
+            // = 1000원
+            // = 5만원
+            val sender = AccountBalance.of(
+                SnowFlakeId(10001),
+                SnowFlakeId(10001),
+                Money.fromDecimalString("10000.00000000")
+            )
+            val receiver = AccountBalance.of(
+                SnowFlakeId(10002),
+                SnowFlakeId(10002),
+                Money.fromDecimalString("50000.00000000")
+            )
 
             accountBalanceRepository.save(sender)
             accountBalanceRepository.save(receiver)

@@ -2,16 +2,17 @@ package io.github.hyungkishin.transentia.consumer.model
 
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
-import io.github.hyungkishin.transentia.common.snowflake.UserId
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 
 class AccountBalance private constructor(
-    val userId: UserId,
+    val id: SnowFlakeId,
+    val snowFlakeId: SnowFlakeId,
     var balance: Money,
 ) {
 
     companion object {
-        fun initialize(userId: UserId, balance: Money): AccountBalance {
-            return AccountBalance(userId, balance)
+        fun of(id: SnowFlakeId, snowFlakeId: SnowFlakeId, balance: Money): AccountBalance {
+            return AccountBalance(id, snowFlakeId, balance)
         }
     }
 
@@ -31,5 +32,5 @@ class AccountBalance private constructor(
     }
 
     fun current(): Money = balance
-    
+
 }

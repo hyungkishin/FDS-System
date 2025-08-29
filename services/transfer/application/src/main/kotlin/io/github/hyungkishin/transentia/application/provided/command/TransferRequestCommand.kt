@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.application.provided.command
 
-import io.github.hyungkishin.transentia.common.snowflake.UserId
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.consumer.model.Money
 
 data class TransferRequestCommand(
@@ -9,7 +9,7 @@ data class TransferRequestCommand(
     val amount: String,
 ) {
 
-    fun senderUserId(): UserId = UserId(senderId)
-    fun receiverUserId(): UserId = UserId(receiverId)
+    fun senderUserId(): SnowFlakeId = SnowFlakeId(senderId)
+    fun receiverUserId(): SnowFlakeId = SnowFlakeId(receiverId)
     fun amount(): Money = Money.Companion.fromDecimalString(amount)
 }

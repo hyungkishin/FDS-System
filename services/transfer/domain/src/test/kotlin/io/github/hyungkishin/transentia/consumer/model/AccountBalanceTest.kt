@@ -1,15 +1,15 @@
 package io.github.hyungkishin.transentia.consumer.model
 
 import io.github.hyungkishin.transentia.common.error.DomainException
-import io.github.hyungkishin.transentia.common.snowflake.UserId
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class AccountBalanceTest {
 
-    private val userId = UserId(1L)
+    private val snowFlakeId = SnowFlakeId(1L)
     private val initial = Money.fromDecimalString("100.00")
-    private val account = AccountBalance.initialize(userId, initial)
+    private val account = AccountBalance.of(snowFlakeId, initial)
 
     @Test
     fun `초기 잔액은 정확히 설정된다`() {
@@ -38,7 +38,7 @@ class AccountBalanceTest {
 
     @Test
     fun `여러 번 입출금해도 잔액 정합성이 유지된다`() {
-        val acc = AccountBalance.initialize(userId, Money.fromDecimalString("200.00"))
+        val acc = AccountBalance.of(snowFlakeId, Money.fromDecimalString("200.00"))
         acc.withdrawOrThrow(Money.fromDecimalString("50.00"))
         acc.deposit(Money.fromDecimalString("80.00"))
         acc.withdrawOrThrow(Money.fromDecimalString("30.00"))

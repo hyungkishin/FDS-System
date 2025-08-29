@@ -5,6 +5,7 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 
 /**
+ * NOTICE: 송금 이후, db commit 이후 fds 에 event Publishing
  * @see KafkaAfterCommitForwarder
  */
 @Component

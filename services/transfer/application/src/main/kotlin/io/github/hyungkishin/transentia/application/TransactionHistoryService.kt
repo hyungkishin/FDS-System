@@ -3,7 +3,7 @@ package io.github.hyungkishin.transentia.application
 import io.github.hyungkishin.transentia.application.provided.TransactionHistoryRegister
 import io.github.hyungkishin.transentia.application.required.TransactionHistoryRepository
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
-import io.github.hyungkishin.transentia.common.snowflake.TransactionId
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.consumer.model.Transaction
 import io.github.hyungkishin.transentia.consumer.model.TransactionHistory
 import org.springframework.stereotype.Service
@@ -18,13 +18,13 @@ class TransactionHistoryService(
 
     @Transactional
     override fun recordSuccess(transaction: Transaction) {
-        val history = TransactionHistory.successOf(transaction, TransactionId(idGenerator.nextId()))
+        val history = TransactionHistory.successOf(transaction, SnowFlakeId(idGenerator.nextId()))
         transactionHistoryRepository.save(history)
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     override fun recordFail(transaction: Transaction, reason: String?) {
-        val history = TransactionHistory.failOf(transaction, TransactionId(idGenerator.nextId()), reason)
+        val history = TransactionHistory.failOf(transaction, SnowFlakeId(idGenerator.nextId()), reason)
         transactionHistoryRepository.save(history)
     }
 

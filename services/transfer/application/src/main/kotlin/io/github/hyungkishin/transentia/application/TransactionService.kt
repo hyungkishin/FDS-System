@@ -9,7 +9,7 @@ import io.github.hyungkishin.transentia.application.required.event.EventPublishe
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
-import io.github.hyungkishin.transentia.common.snowflake.TransferId
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.consumer.model.Transaction
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -28,17 +28,17 @@ class TransactionService(
         val sender = accountBalanceRepository.findByUserId(command.senderUserId())
             ?: throw DomainException(
                 CommonError.NotFound("account_balance", command.senderUserId().toString()),
-                "송신자 계좌 정보를 찾을 수 없습니다. userId=${command.senderUserId()}"
+                "송신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.senderUserId()}"
             )
 
         val receiver = accountBalanceRepository.findByUserId(command.receiverUserId())
             ?: throw DomainException(
                 CommonError.NotFound("account_balance", command.receiverUserId().toString()),
-                "수신자 계좌 정보를 찾을 수 없습니다. userId=${command.receiverUserId()}"
+                "수신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.receiverUserId()}"
             )
 
         val transfer = Transaction.of(
-            TransferId(idGenerator.nextId()), sender.userId, receiver.userId, command.amount()
+            SnowFlakeId(idGenerator.nextId()), sender.snowFlakeId, receiver.snowFlakeId, command.amount()
         )
 
         try {
@@ -67,7 +67,7 @@ class TransactionService(
                 CommonError.NotFound("transaction", transactionId.toString()),
                 "송금 이력이 존재하지 않습니다. id=$transactionId"
             )
-        return TransferResponseCommand.Companion.from(tx)
+        return TransferResponseCommand.from(tx)
     }
 
 }
