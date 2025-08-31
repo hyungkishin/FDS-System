@@ -17,8 +17,8 @@ class TransactionTest {
         val tx = Transaction.of(SnowFlakeId(100L), sender, receiver, amount)
 
         assertEquals(TransactionStatus.PENDING, tx.status)
-        assertEquals(sender, tx.senderSnowFlakeId)
-        assertEquals(receiver, tx.receiverSnowFlakeId)
+        assertEquals(sender, tx.senderId)
+        assertEquals(receiver, tx.receiverId)
         assertEquals(amount, tx.amount)
         assertNotNull(tx.createdAt)
     }

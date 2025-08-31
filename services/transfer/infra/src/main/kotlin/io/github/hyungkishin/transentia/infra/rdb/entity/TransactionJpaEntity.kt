@@ -72,8 +72,8 @@ class TransactionJpaEntity(
         fun from(domain: Transaction): TransactionJpaEntity =
             TransactionJpaEntity(
                 id = domain.id.value,
-                senderUserId = domain.senderSnowFlakeId.value,
-                receiverUserId = domain.receiverSnowFlakeId.value,
+                senderUserId = domain.senderId.value,
+                receiverUserId = domain.receiverId.value,
                 amount = domain.amount.rawValue,
                 status = domain.status,
                 receivedAt = domain.createdAt // 의미가 다르면 적절히 매핑

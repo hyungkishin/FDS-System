@@ -40,13 +40,13 @@ sealed interface CommonError : DomainError {
     }
 
     /** 권한 없음. */
-    public data object PermissionDenied : CommonError {
+    data object PermissionDenied : CommonError {
         override val code: String = "common.permission-denied"
         override val message: String = "권한이 없습니다."
     }
 
     /** 리소스 상태 충돌. */
-    public data class Conflict(val reason: String) : CommonError {
+    data class Conflict(val reason: String) : CommonError {
         override val code: String = "common.conflict"
         override val message: String = "리소스 상태 충돌이 발생했습니다."
         override val meta: Map<String, Any?> = mapOf("reason" to reason)

@@ -1,32 +1,41 @@
 package io.github.hyungkishin.transentia.infra.event
 
-import io.github.hyungkishin.transentia.common.message.transfer.TransferCompletedV1
-import io.github.hyungkishin.transentia.common.message.transfer.TransferFailedV1
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
+import org.springframework.kafka.support.KafkaHeaders
+import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
 
 @Component
-class TransferEventListener {
-
-    init { println("### TransferEventListener bean created") }
-
-    @KafkaListener(
-        topics = ["transfer.completed"],
-        groupId = "fds-consumer",
-        containerFactory = "kafkaListenerContainerFactory"
-    )
-    fun onCompleted(event: TransferCompletedV1) {
-        println("[FDS] Transfer Completed Event 수신: $event")
-        // TODO: Application 계층 서비스 호출 (AnalyzeTransferService)
-    }
+class TransferEventsConsumer(
+    private val objectMapper: ObjectMapper
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @KafkaListener(
-        topics = ["transfer.failed"],
-        groupId = "fds-consumer",
-        containerFactory = "kafkaListenerContainerFactory"
+        topics = ["\${app.transfer.topic}"],
+        groupId = "\${spring.kafka.consumer.group-id}"
     )
-    fun onFailed(event: TransferFailedV1) {
-        println("[FDS] Transfer Failed Event 수신: $event")
-        // TODO: 실패 트랜잭션 분석 or 리스크 로그 기록
+    fun onMessage(
+        payload: ByteArray,
+        @Header(KafkaHeaders.RECEIVED_KEY) key: String?,
+        @org.springframework.messaging.handler.annotation.Headers headers: Map<String, Any>
+    ) {
+        val json = String(payload)
+        val node: JsonNode = objectMapper.readTree(json)
+
+        fun headerString(name: String): String? =
+            (headers[name] as? ByteArray)?.toString(Charsets.UTF_8)
+
+        val eventType = headerString("eventType") ?: "Unknown"
+        val traceId = headerString("traceId")
+        val eventId = node.get("eventId")?.asLong()
+
+        log.info(
+            "[FDS] RECEIVED key={} eventType={} eventId={} traceId={} json={}",
+            key, eventType, eventId, traceId, json
+        )
     }
 }

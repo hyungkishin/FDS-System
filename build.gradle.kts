@@ -17,10 +17,10 @@ version = "0.0.1-SNAPSHOT"
 val kotlinVersion = "1.9.25"
 
 // 실행 가능한 Spring Boot 앱 모듈
-val bootApps = setOf("transfer-api", "transfer-publisher", "transfer-consumer")
+val bootApps = setOf("transfer-api", "transfer-relay", "transfer-publisher", "transfer-consumer")
 // Spring 관련 플러그인 필요한 모듈
 val springModules =
-    setOf("transfer-api", "transfer-publisher", "transfer-consumer", "transfer-infra", "delivery-http-error")
+    setOf("transfer-api", "transfer-relay", "transfer-publisher", "transfer-consumer", "transfer-infra", "delivery-http-error")
 
 // JPA 필요한 모듈
 val jpaModules = setOf("transfer-infra")

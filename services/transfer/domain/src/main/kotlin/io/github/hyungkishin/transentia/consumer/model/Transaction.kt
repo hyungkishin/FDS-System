@@ -9,8 +9,8 @@ import java.time.Instant
 
 class Transaction private constructor(
     val id: SnowFlakeId,
-    val senderSnowFlakeId: SnowFlakeId,
-    val receiverSnowFlakeId: SnowFlakeId,
+    val senderId: SnowFlakeId,
+    val receiverId: SnowFlakeId,
     val amount: Money,
     var status: TransactionStatus,
     var createdAt: Instant,
@@ -29,8 +29,8 @@ class Transaction private constructor(
             require(amount.isPositive()) { "송금 금액은 0보다 커야 합니다." }
             return Transaction(
                 id = id,
-                senderSnowFlakeId = senderSnowFlakeId,
-                receiverSnowFlakeId = receiverSnowFlakeId,
+                senderId = senderSnowFlakeId,
+                receiverId = receiverSnowFlakeId,
                 amount = amount,
                 status = TransactionStatus.PENDING,
                 createdAt = Instant.now(clock)
@@ -51,15 +51,13 @@ class Transaction private constructor(
 
     /** 멱등 완료: 이미 COMPLETED면 이벤트 생성 안 함(null) */
     fun complete(): TransferCompletedEvent {
-//        check(status == TransactionStatus.COMPLETED) { "이미 종료된 송금입니다." }
         check(status == TransactionStatus.PENDING) { "PENDING 상태만 완료할 수 있습니다." }
         status = TransactionStatus.COMPLETED
-        return TransferCompletedEvent(id, senderSnowFlakeId, receiverSnowFlakeId, amount)
+        return TransferCompletedEvent(id, senderId, receiverId, amount)
     }
 
     /** 멱등 실패 */
     fun fail(reason: String): TransferFailedEvent {
-//        check(status == TransactionStatus.FAILED) { "이미 실패된 송금입니다." }
         check(status == TransactionStatus.PENDING) { "PENDING 상태만 실패 처리할 수 있습니다." }
         status = TransactionStatus.FAILED
         failReason = reason
@@ -71,6 +69,6 @@ class Transaction private constructor(
     override fun hashCode(): Int = id.hashCode()
 
     override fun toString(): String =
-        "Transaction(id=$id, sender=$senderSnowFlakeId, receiver=$receiverSnowFlakeId, amount=$amount, status=$status)"
+        "Transaction(id=$id, sender=$senderId, receiver=$receiverId, amount=$amount, status=$status)"
 
 }

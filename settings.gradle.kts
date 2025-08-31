@@ -36,6 +36,9 @@ services.forEach { service ->
 include("transfer-api")
 project(":transfer-api").projectDir = file("services/transfer/instances/api")
 
+include("transfer-relay")
+project(":transfer-relay").projectDir = file("services/transfer/instances/transfer-relay")
+
 include("fds-consumer")
 project(":fds-consumer").projectDir = file("services/fds/instances/consumer")
 

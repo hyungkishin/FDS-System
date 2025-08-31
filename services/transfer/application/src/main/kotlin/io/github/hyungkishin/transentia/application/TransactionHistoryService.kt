@@ -16,7 +16,7 @@ class TransactionHistoryService(
     private val idGenerator: IdGenerator,
 ) : TransactionHistoryRegister {
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     override fun recordSuccess(transaction: Transaction) {
         val history = TransactionHistory.successOf(transaction, SnowFlakeId(idGenerator.nextId()))
         transactionHistoryRepository.save(history)

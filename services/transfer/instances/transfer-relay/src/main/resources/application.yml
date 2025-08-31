@@ -1,0 +1,29 @@
+spring:
+  application.name: transfer-relay
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transfer
+    username: postgres
+    password: pass1234
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:9094
+    producer:
+      client-id: transfer-relay
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        linger.ms: 5
+        batch.size: 65536
+        compression.type: lz4
+        max.in.flight.requests.per.connection: 1
+
+server.port: 8081
+
+app:
+  relay.enabled: true
+  outbox.relay:
+    batchSize: 300
+    fixedDelayMs: 100
+    baseBackoffMs: 200
+  transfer.topic: transfer.events.v1

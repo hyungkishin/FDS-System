@@ -19,7 +19,9 @@ class AccountBalancePersistenceAdapter(
         val currentVersion = jpaRepository.findById(account.id.value)
             .map { it.version }
             .orElse(null)
+
         val entity = AccountBalanceJpaEntity.from(account, currentVersion)
+
         return jpaRepository.save(entity).toDomain()
     }
 

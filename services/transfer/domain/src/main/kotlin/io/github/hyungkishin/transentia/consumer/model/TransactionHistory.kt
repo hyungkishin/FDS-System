@@ -17,8 +17,8 @@ class TransactionHistory private constructor(
             TransactionHistory(
                 id = id,
                 transactionId = transaction.id,
-                senderId = transaction.senderSnowFlakeId,
-                receiverId = transaction.receiverSnowFlakeId,
+                senderId = transaction.senderId,
+                receiverId = transaction.receiverId,
                 amount = transaction.amount,
                 status = TransactionHistoryStatus.SUCCESS,
                 reason = null,
@@ -28,8 +28,8 @@ class TransactionHistory private constructor(
             TransactionHistory(
                 id = id,
                 transactionId = transaction.id,
-                senderId = transaction.senderSnowFlakeId,
-                receiverId = transaction.receiverSnowFlakeId,
+                senderId = transaction.senderId,
+                receiverId = transaction.receiverId,
                 amount = transaction.amount,
                 status = TransactionHistoryStatus.FAIL,
                 reason = reason,

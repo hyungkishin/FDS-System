@@ -6,17 +6,17 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":transfer-application"))
+    implementation(project(":transfer-infra"))
+    implementation(project(":delivery-http-error"))
     implementation(project(":shared-common"))
-    implementation(project(":fds-infra"))
 
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.kafka:spring-kafka")
-    implementation("org.springframework:spring-messaging")
 
-    implementation("org.springframework.boot:spring-boot-starter-json")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.springframework.kafka:spring-kafka-test")
 }
