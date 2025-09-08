@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.application.required.command
 
-import io.github.hyungkishin.transentia.consumer.model.Transaction
+import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
 import java.time.Instant
 
 data class TransferResponseCommand(

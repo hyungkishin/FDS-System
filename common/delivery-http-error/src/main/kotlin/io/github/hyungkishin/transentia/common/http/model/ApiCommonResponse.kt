@@ -7,5 +7,4 @@ data class ApiCommonResponse<T>(
     val code: String = "ok",
     val message: String = "success",
     val data: T? = null,
-    val traceId: String? = null,
 )

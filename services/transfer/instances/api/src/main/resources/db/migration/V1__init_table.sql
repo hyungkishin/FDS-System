@@ -11,22 +11,23 @@ $$
     END
 $$;
 
-CREATE TABLE IF NOT EXISTS users
+-- users 테이블
+CREATE TABLE users
 (
-    id                   BIGINT PRIMARY KEY,
-    name                 TEXT        NOT NULL,
-    email                TEXT UNIQUE NOT NULL,
-    status               user_status NOT NULL DEFAULT 'ACTIVE',
-    is_transfer_locked   BOOLEAN     NOT NULL DEFAULT false,
-    daily_transfer_limit BIGINT      NOT NULL DEFAULT 1000000,
-    role                 user_role   NOT NULL DEFAULT 'USER',
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                   BIGINT PRIMARY KEY,                    -- 사용자 고유 ID (Snowflake)
+    name                 TEXT        NOT NULL,                  -- 사용자 이름
+    email                TEXT UNIQUE NOT NULL,                  -- 사용자 이메일 (UNIQUE)
+    status               user_status NOT NULL DEFAULT 'ACTIVE', -- 계정 상태
+    is_transfer_locked   BOOLEAN     NOT NULL DEFAULT false,    -- 송금 잠금 여부
+    transfer_lock_reason TEXT        NULL,
+    daily_transfer_limit BIGINT      NOT NULL DEFAULT 5000000,  -- 1일 최대 송금 가능 금액 (500만원)
+    role                 user_role   NOT NULL DEFAULT 'USER',   -- 사용자 역할
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),    -- 계정 생성 일시
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()     -- 마지막 정보 갱신 일시
 );
 
 -- 인덱스
-CREATE INDEX IF NOT EXISTS idx_users_status ON users (status);
-CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+CREATE INDEX idx_users_status_locked ON users (status, is_transfer_locked);
 
 -- 코멘트
 COMMENT ON TABLE users IS '송금 시스템 사용자 정보';
@@ -41,26 +42,41 @@ COMMENT ON COLUMN users.created_at IS '계정 생성 일시';
 COMMENT ON COLUMN users.updated_at IS '마지막 정보 갱신 일시';
 
 ---
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_type') THEN
+            CREATE TYPE account_type AS ENUM ('CHECKING', 'SAVINGS', 'DEPOSIT');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_status') THEN
+            CREATE TYPE account_status AS ENUM ('ACTIVE', 'SUSPENDED', 'CLOSED');
+        END IF;
+    END
+$$;
 
 CREATE TABLE account_balances
 (
-    id         BIGINT PRIMARY KEY,   -- ID (Snowflake)
-    user_id    BIGINT      NOT NULL, -- TODO : REFERENCES users (id)
-    balance    BIGINT      NOT NULL DEFAULT 0 CHECK (balance >= 0),
---     currency   currency_code  NOT NULL DEFAULT 'KRW',
-    version    BIGINT      NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id             BIGINT PRIMARY KEY,                         -- ID (Snowflake)
+    user_id        BIGINT         NOT NULL,                    -- 사용자 ID (1:1 관계, 현재) -- TODO : REFERENCES users (id)
+    account_number VARCHAR(20)    NOT NULL,                    -- 계좌번호
+    balance        BIGINT         NOT NULL DEFAULT 0,          -- 잔액
+    account_type   account_type   NOT NULL DEFAULT 'CHECKING', -- 계좌 유형
+    status         account_status NOT NULL DEFAULT 'ACTIVE',   -- 계좌 상태
+    version        BIGINT         NOT NULL DEFAULT 0,          -- 낙관적 락
+    created_at     TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ    NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE account_balances IS '사용자의 계좌 잔액 정보';
-COMMENT ON COLUMN account_balances.version IS '낙관적 락(Optimistic Lock) 버전 관리';
-CREATE INDEX idx_account_balances_updated_at ON account_balances (updated_at);
+-- 인덱스
+CREATE UNIQUE INDEX idx_account_balances_account_number ON account_balances (account_number);
+
+
 
 -- updated_at 자동 갱신 트리거
 CREATE OR REPLACE FUNCTION trg_ab_touch_updated_at()
     RETURNS trigger
     LANGUAGE plpgsql AS
+
 $$
 BEGIN
     NEW.updated_at := now();

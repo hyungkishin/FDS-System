@@ -22,6 +22,11 @@ services:
   kafka:
     image: bitnami/kafka:3.7                          # Kafka 3.x + KRaft 지원, 로컬에서 가볍고 표준적
     container_name: transfer-kafka                    # 네이밍 통일(transfer), ps/logs에서 검색 쉬움
+    networks:
+      default:
+        aliases:
+          - transfer-kafka   # ✅ 내부 DNS에 transfer-kafka 등록
+          - kafka            # ✅ kafka 이름도 같이 등록
     restart: unless-stopped                           # 명시적으로 중지하기 전까지 자동 재시작
     ports:
       - "9094:9094"                                   # 호스트에서 접속할 외부용 리스너(EXTERNAL) 포트로 9094 사용 (내부 9092와 구분)
@@ -34,7 +39,8 @@ services:
 
       # 리스너 3종(내부/외부/컨트롤러)을 분리
       KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,EXTERNAL://:9094,CONTROLLER://:9093"  # 컨테이너 내부/외부/컨트롤러 용도 분리
-      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://host.docker.internal:9094"
+
       # 메타데이터 광고 주소 분리: 컨테이너 내부는 서비스명 kafka, 호스트는 localhost:9094로 접속하게 하여 '메타데이터 루프백' 문제 방지
 
       KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
@@ -54,6 +60,10 @@ services:
 
       # 선택: KRaft 클러스터 ID 고정 (문제 시 주석 처리해 자동 생성에 맡겨도 됨)
       KAFKA_KRAFT_CLUSTER_ID: "aaaaaaaaaaaaaaaaaaaaaa"          # 재기동/볼륨 유지 시 동일 클러스터로 인식
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     healthcheck:
       test: [ "CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1" ]
       # 브로커가 토픽 목록 조회가 가능해야 'healthy' 판단 → 내부 리스너(9092)로 자체 점검
@@ -93,3 +103,9 @@ services:
 volumes:
   pg_data:                                               # Postgres 데이터 영속 볼륨
   kafka_data:                                            # Kafka 로그/메타데이터 영속 볼륨
+
+networks:
+  default:
+    driver: bridge
+  fds-net:
+    external: true

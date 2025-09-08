@@ -1,8 +1,8 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.consumer.model.AccountBalance
-import io.github.hyungkishin.transentia.consumer.model.Money
+import io.github.hyungkishin.transentia.domain.model.account.AccountBalance
+import io.github.hyungkishin.transentia.domain.model.account.Money
 import io.github.hyungkishin.transentia.infra.config.BaseEntity
 import jakarta.persistence.*
 import org.hibernate.Hibernate
@@ -15,6 +15,9 @@ class AccountBalanceJpaEntity(
     @Id
     val id: Long,
 
+    @Column(name = "account_number", nullable = false)
+    val accountNumber: String,
+
     @Column(name = "user_id", nullable = false)
     val userId: Long,
 
@@ -22,29 +25,31 @@ class AccountBalanceJpaEntity(
     var balance: Long,
 
     @Version
-    var version: Long? = null
+    var version: Long,
 
-) : BaseEntity(), Persistable<Long> {
+) : BaseEntity() {
 
-    override fun getId(): Long = id
-
-    // Snowflake 사전 ID 여도 version==null 이면 persist(신규), 아니면 merge(기존)로 명확히 분기
-    override fun isNew(): Boolean = (version == null)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)  // 여기서만 읽기 전용
+    var user: UserJpaEntity? = null
 
     fun toDomain(): AccountBalance =
         AccountBalance.of(
             SnowFlakeId(id),
             SnowFlakeId(userId),
-            Money.fromRawValue(balance)
+            accountNumber,
+            Money.fromRawValue(balance),
+            version,
         )
 
     companion object {
-        fun from(domain: AccountBalance, currentVersion: Long? = null): AccountBalanceJpaEntity =
+        fun from(domain: AccountBalance): AccountBalanceJpaEntity =
             AccountBalanceJpaEntity(
                 id = domain.id.value,
-                userId = domain.snowFlakeId.value,
+                userId = domain.userId.value,
                 balance = domain.current().rawValue,
-                version = currentVersion
+                accountNumber = domain.accountNumber,
+                version = domain.version,
             )
     }
 

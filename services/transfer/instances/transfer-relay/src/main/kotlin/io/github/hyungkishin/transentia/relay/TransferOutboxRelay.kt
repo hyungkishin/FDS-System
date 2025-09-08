@@ -1,25 +1,22 @@
-package io.github.hyungkishin.transentia.infra.event
-
+package io.github.hyungkishin.transentia.relay
 
 import io.github.hyungkishin.transentia.infra.rdb.adapter.TransferEventsOutboxJdbcRepository
+import io.github.hyungkishin.transentia.relay.config.KafkaEventPublisherAdapter
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
-@ConditionalOnProperty(prefix = "app.relay", name = ["enabled"], havingValue = "true")
 @Component
 class TransferOutboxRelay(
     private val outbox: TransferEventsOutboxJdbcRepository,
     private val publisher: KafkaEventPublisherAdapter,
-    @Value("\${app.outbox.relay.batchSize:200}") private val batchSize: Int,
-    @Value("\${app.outbox.relay.baseBackoffMs:200}") private val baseBackoffMs: Long,
+    @Value("\${app.outbox.relay.batchSize:300}") private val batchSize: Int,
+    @Value("\${app.outbox.relay.baseBackoffMs:1000}") private val baseBackoffMs: Long,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // 작은 주기 배치 (실시간에 가까움)
-    @Scheduled(fixedDelayString = "\${app.outbox.relay.fixedDelayMs:200}", scheduler = "relayScheduler")
+    @Scheduled(fixedDelayString = "\${app.outbox.relay.fixedDelayMs:500}")
     fun run() {
         val batch = outbox.claimBatch(batchSize)
         if (batch.isEmpty()) return

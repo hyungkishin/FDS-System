@@ -3,7 +3,6 @@ package io.github.hyungkishin.transentia.application
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.hyungkishin.transentia.application.provided.TransactionRegister
 import io.github.hyungkishin.transentia.application.provided.command.TransferRequestCommand
-import io.github.hyungkishin.transentia.application.required.AccountBalanceRepository
 import io.github.hyungkishin.transentia.application.required.TransactionRepository
 import io.github.hyungkishin.transentia.application.required.TransferEventsOutboxRepository
 import io.github.hyungkishin.transentia.application.required.command.TransferResponseCommand
@@ -12,7 +11,8 @@ import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.consumer.model.Transaction
+import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
+import io.github.hyungkishin.transentia.domain.validator.transfer.TransferValidator
 import org.slf4j.MDC
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,37 +21,30 @@ import java.util.*
 @Service
 class TransactionService(
     private val transactionRepository: TransactionRepository,
-    private val accountBalanceRepository: AccountBalanceRepository,
+    private val userService: UserServiceImpl,
     private val transactionHistoryService: TransactionHistoryService,
     private val idGenerator: IdGenerator,
     private val transferEventsOutboxRepository: TransferEventsOutboxRepository,
-    private val objectMapper: ObjectMapper,
+    private val objectMapper: ObjectMapper, // 별도 Bean 으로 승격
 ) : TransactionRegister {
 
     @Transactional
     override fun create(command: TransferRequestCommand): TransferResponseCommand {
-        val sender = accountBalanceRepository.findByUserId(command.senderUserId())
-            ?: throw DomainException(
-                CommonError.NotFound("account_balance", command.senderUserId().toString()),
-                "송신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.senderUserId()}"
-            )
 
-        val receiver = accountBalanceRepository.findByUserId(command.receiverUserId())
-            ?: throw DomainException(
-                CommonError.NotFound("account_balance", command.receiverUserId().toString()),
-                "수신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.receiverUserId()}"
-            )
+        val (sender, receiver) = userService.findUser(command.senderUserId(), command.receiverAccountNumber())
+
+        TransferValidator.validate(sender, receiver, command.amount())
 
         val transfer = Transaction.of(
-            SnowFlakeId(idGenerator.nextId()), sender.snowFlakeId, receiver.snowFlakeId, command.amount()
+            SnowFlakeId(idGenerator.nextId()), sender.id, receiver.id, command.amount()
         )
 
         try {
-            sender.withdrawOrThrow(command.amount())
-            receiver.deposit(command.amount())
+            sender.accountBalance.withdrawOrThrow(command.amount())
+            receiver.accountBalance.deposit(command.amount())
 
-            accountBalanceRepository.save(sender)
-            accountBalanceRepository.save(receiver)
+            userService.save(sender)
+            userService.save(receiver)
 
             val transaction = transactionRepository.save(transfer)
             transactionHistoryService.recordSuccess(transaction)
@@ -61,7 +54,7 @@ class TransactionService(
                 aggregateType = "Transaction",
                 aggregateId = transaction.id.value,
                 payload = mapOf(
-                    "eventId" to transaction.id.value, // 컨슈머용 별도 멱등키가 필요하면 ..?
+                    "eventId" to transaction.id.value,
                     "transactionId" to transaction.id.value,
                     "senderId" to transaction.senderId.value,
                     "receiverId" to transaction.receiverId.value,
@@ -108,6 +101,7 @@ class TransactionService(
     }
 
     /** Outbox에 한 건 적재 */
+    // JSON -? ??
     private fun enqueueOutbox(
         eventType: String,
         aggregateType: String,
@@ -119,13 +113,14 @@ class TransactionService(
         val headersJson = objectMapper.writeValueAsString(headers)
 
         val row = TransferEvent(
-            eventId = aggregateId, // 멱등키
+            eventId = idGenerator.nextId(),
             aggregateType = aggregateType,
             aggregateId = aggregateId.toString(),
             eventType = eventType,
             payload = payloadJson,
             headers = headersJson
         )
+
         transferEventsOutboxRepository.save(row)
     }
 

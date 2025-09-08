@@ -155,31 +155,6 @@ COMMENT ON COLUMN transaction_histories.created_at IS '생성 시각';
 CREATE INDEX idx_tx_histories_txid_created
     ON transaction_histories(transaction_id, created_at);
 
--- CREATE TABLE correction_log (
---                                 id BIGINT PRIMARY KEY,
---                                 tx_id BIGINT NOT NULL REFERENCES transactions(id),
---                                 new_tx_id BIGINT NOT NULL REFERENCES transactions(id),
---                                 amount NUMERIC(20, 8) NOT NULL,
---                                 currency currency_code NOT NULL DEFAULT 'KRW',
---                                 restored_at TIMESTAMPTZ NOT NULL,
---                                 restored_by BIGINT NOT NULL,
---                                 reason TEXT NOT NULL
--- );
---
--- COMMENT ON TABLE correction_log IS '트랜잭션 정정 이력 (정상 처리된 송금을 관리자 또는 시스템이 보정한 경우)';
--- COMMENT ON COLUMN correction_log.tx_id IS '원본 트랜잭션 ID (정정 대상)';
--- COMMENT ON COLUMN correction_log.new_tx_id IS '정정된 신규 트랜잭션 ID (대체 송금)';
--- COMMENT ON COLUMN correction_log.amount IS '정정된 금액 (대체 트랜잭션에 반영된 금액)';
--- COMMENT ON COLUMN correction_log.currency IS '정정 금액의 통화';
--- COMMENT ON COLUMN correction_log.restored_at IS '정정 처리 시각';
--- COMMENT ON COLUMN correction_log.restored_by IS '정정 처리 관리자 ID';
--- COMMENT ON COLUMN correction_log.reason IS '정정 사유 (예: 오입력, 환불, 보정 등)';
---
--- CREATE UNIQUE INDEX uniq_correction_log_tx_id ON correction_log(tx_id);
--- CREATE INDEX idx_tx_id_restored_by ON correction_log(tx_id, restored_by);
--- CREATE INDEX idx_new_tx_id_restored_by ON correction_log(new_tx_id, restored_by);
-
-
 -- =============================================
 -- transfer_events & Idempotency tables (Snowflake Long)
 -- =============================================
@@ -244,234 +219,349 @@ CREATE INDEX IF NOT EXISTS ix_transfer_events_retry_failed
 CREATE INDEX IF NOT EXISTS ix_transfer_events_aggregate
     ON transfer_events (aggregate_type, aggregate_id, created_at);
 
--- -- 컨슈머 아이템포턴시(중복 처리 방지)
--- CREATE TABLE IF NOT EXISTS processed_messages (
---                                                   message_key  VARCHAR(200) PRIMARY KEY,             -- event_id 문자열 or (topic,partition,offset) 직렬화
---                                                   processed_at TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
---                                                   source       VARCHAR(32)  NOT NULL DEFAULT 'kafka'
--- );
---
--- CREATE INDEX IF NOT EXISTS idx_processed_messages_at ON processed_messages (processed_at);
---
--- COMMENT ON TABLE  processed_messages IS '컨슈머 중복 실행 방지 키 저장소';
--- COMMENT ON COLUMN processed_messages.message_key  IS '이벤트 유일키';
--- COMMENT ON COLUMN processed_messages.processed_at IS '처리 시각';
--- COMMENT ON COLUMN processed_messages.source       IS '메시지 소스 구분';
+--  FDS 스키마
 
--- ============================================
--- RISK DETECTION DOMAIN (Phase-2)
--- ============================================
+-- 확장 모듈 활성화 (JSON 기능 강화)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
--- CREATE TABLE rules (
---                        id BIGINT PRIMARY KEY,
---                        rule_name TEXT UNIQUE NOT NULL,
---                        condition_json JSON NOT NULL,
---                        threshold INT NOT NULL,
---                        enabled BOOLEAN NOT NULL DEFAULT TRUE,
---                        created_at TIMESTAMPTZ DEFAULT now()
--- );
---
--- COMMENT ON TABLE rules IS '이상거래 탐지 룰 정의 (현재 적용 중인 룰 세트)';
--- COMMENT ON COLUMN rules.rule_name IS '룰 이름 (고유)';
--- COMMENT ON COLUMN rules.condition_json IS '룰 조건 정의 (JSON)';
--- COMMENT ON COLUMN rules.threshold IS '위험 판단 기준값 (ex: 스코어 80 이상)';
--- COMMENT ON COLUMN rules.enabled IS '활성화 여부 (true/false)';
--- COMMENT ON COLUMN rules.created_at IS '룰 등록 일시';
---
--- CREATE TABLE rule_history (
---                               id BIGINT PRIMARY KEY,
---                               rule_id BIGINT NOT NULL REFERENCES rules(id),
---                               version INT NOT NULL,
---                               condition_json JSON NOT NULL,
---                               threshold INT NOT NULL,
---                               created_by BIGINT NOT NULL REFERENCES admin_users(id),
---                               created_at TIMESTAMPTZ DEFAULT now()
--- );
---
--- COMMENT ON TABLE rule_history IS '룰 변경 이력 (버전 기반 정책 추적)';
--- COMMENT ON COLUMN rule_history.rule_id IS '참조 대상 룰 ID';
--- COMMENT ON COLUMN rule_history.version IS '룰 버전 (1부터 증가)';
--- COMMENT ON COLUMN rule_history.condition_json IS '해당 버전의 룰 조건';
--- COMMENT ON COLUMN rule_history.threshold IS '버전별 임계값';
--- COMMENT ON COLUMN rule_history.created_by IS '버전 작성 관리자 ID';
--- COMMENT ON COLUMN rule_history.created_at IS '버전 생성 시각';
---
--- CREATE UNIQUE INDEX uniq_rule_version ON rule_history(rule_id, version);
---
--- CREATE TABLE risk_logs (
---                            id BIGINT PRIMARY KEY,
---                            tx_id BIGINT NOT NULL,
---                            rule_hit BOOLEAN,
---                            ai_score DOUBLE PRECISION,
---                            final_decision final_decision_type NOT NULL,
---                            evaluated_at TIMESTAMPTZ DEFAULT now()
--- );
---
--- COMMENT ON TABLE risk_logs IS 'FDS 위험 탐지 로그 (트랜잭션 기반 룰/AI 분석 결과)';
--- COMMENT ON COLUMN risk_logs.tx_id IS '분석 대상 트랜잭션 ID (transactions.id 논리 참조)';
--- COMMENT ON COLUMN risk_logs.rule_hit IS '사전 정의 룰이 적중했는지 여부';
--- COMMENT ON COLUMN risk_logs.ai_score IS 'AI 모델 기반 이상거래 위험도 점수';
--- COMMENT ON COLUMN risk_logs.final_decision IS '최종 판정 결과: PASS(정상), REVIEW(검토), BLOCK(차단)';
--- COMMENT ON COLUMN risk_logs.evaluated_at IS '분석 수행 시각';
---
--- CREATE INDEX idx_risk_logs_txid_decision ON risk_logs(tx_id, final_decision);
--- CREATE INDEX idx_risk_logs_eval ON risk_logs(evaluated_at);
---
--- CREATE TABLE risk_rule_hits (
---                                 id BIGINT PRIMARY KEY,
---                                 risk_log_id BIGINT NOT NULL,
---                                 rule_id BIGINT NOT NULL,
---                                 hit BOOLEAN NOT NULL,
---                                 score DOUBLE PRECISION NOT NULL
--- );
---
--- COMMENT ON TABLE risk_rule_hits IS '탐지 로그에 대한 룰별 적중 결과';
--- COMMENT ON COLUMN risk_rule_hits.id IS '룰 히트 기록 ID';
--- COMMENT ON COLUMN risk_rule_hits.risk_log_id IS '위험 탐지 로그 ID (risk_logs.id)';
--- COMMENT ON COLUMN risk_rule_hits.rule_id IS '적용된 탐지 룰 ID (rules.id)';
--- COMMENT ON COLUMN risk_rule_hits.hit IS '룰 적중 여부 (true/false)';
--- COMMENT ON COLUMN risk_rule_hits.score IS '해당 룰 기준 점수 (모델 또는 조건 기반)';
---
--- CREATE INDEX idx_risk_hit_rule ON risk_rule_hits(rule_id);
--- CREATE INDEX idx_risk_hit_log ON risk_rule_hits(risk_log_id);
+-- 1. 룰 카테고리 테이블
+CREATE TABLE fraud_rule_categories (
+                                       id BIGSERIAL PRIMARY KEY,
+                                       name VARCHAR(50) NOT NULL UNIQUE,
+                                       description TEXT,
+                                       is_active BOOLEAN DEFAULT true,
+                                       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                                       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
 
--- ============================================
--- EXCHANGE DOMAIN
--- ============================================
+-- 2. 메인 룰 테이블 (JSONB 활용)
+CREATE TYPE rule_type_enum AS ENUM ('BLACKLIST', 'WHITELIST', 'THRESHOLD', 'PATTERN', 'TIME_BASED', 'VELOCITY', 'AMOUNT_LIMIT');
+CREATE TYPE action_type_enum AS ENUM ('BLOCK', 'ALERT', 'LOG_ONLY', 'MANUAL_REVIEW');
 
--- CREATE TABLE exchange_rates (
---                                 id BIGINT PRIMARY KEY,
---                                 from_currency currency_code NOT NULL,
---                                 to_currency currency_code NOT NULL,
---                                 rate NUMERIC(18,8) NOT NULL,
---                                 fetched_at TIMESTAMPTZ NOT NULL,
---                                 source TEXT NOT NULL,
---                                 is_batch BOOLEAN DEFAULT FALSE
--- );
---
--- COMMENT ON TABLE exchange_rates IS '송금 및 온체인 환산을 위한 환율 정보';
--- COMMENT ON COLUMN exchange_rates.id IS '환율 레코드 ID';
--- COMMENT ON COLUMN exchange_rates.from_currency IS '기준 통화 (예: KRW)';
--- COMMENT ON COLUMN exchange_rates.to_currency IS '대상 통화 (예: USD)';
--- COMMENT ON COLUMN exchange_rates.rate IS '환율 값 (from → to 변환 비율)';
--- COMMENT ON COLUMN exchange_rates.fetched_at IS '환율 조회 시각 (실제 적용 기준)';
--- COMMENT ON COLUMN exchange_rates.source IS '환율 데이터 출처 (API 또는 수동)';
--- COMMENT ON COLUMN exchange_rates.is_batch IS '배치 수집 여부 (true: 배치 처리, false: 실시간)';
---
--- CREATE INDEX idx_exchange_composite ON exchange_rates(from_currency, to_currency, source, fetched_at);
+CREATE TABLE fraud_rules (
+                             id BIGSERIAL PRIMARY KEY,
+                             category_id BIGINT NOT NULL REFERENCES fraud_rule_categories(id),
+                             rule_name VARCHAR(100) NOT NULL,
+                             rule_type rule_type_enum NOT NULL,
+                             priority INTEGER DEFAULT 0,
+                             is_active BOOLEAN DEFAULT true,
+                             risk_score DECIMAL(3,2) DEFAULT 0.00 CHECK (risk_score >= 0.00 AND risk_score <= 1.00),
+                             action_type action_type_enum DEFAULT 'LOG_ONLY',
 
--- ============================================
--- DLQ DOMAIN
--- ============================================
+    -- JSONB로 유연한 룰 조건 저장
+                             conditions JSONB NOT NULL,
 
--- CREATE TABLE dlq_events (
---                             id BIGINT PRIMARY KEY,
---                             tx_id BIGINT NOT NULL,
---                             component TEXT NOT NULL,
---                             error_message TEXT NOT NULL,
---                             received_at TIMESTAMPTZ NOT NULL,
---                             resolved BOOLEAN DEFAULT FALSE,
---                             resolved_at TIMESTAMPTZ
--- );
---
--- COMMENT ON TABLE dlq_events IS 'Kafka 또는 비동기 처리 중 실패한 이벤트 기록';
--- COMMENT ON COLUMN dlq_events.tx_id IS '실패 연관 트랜잭션 ID (transactions.id 논리 참조)';
--- COMMENT ON COLUMN dlq_events.component IS '실패 발생 컴포넌트 (예: risk-processor, onchain-writer 등)';
--- COMMENT ON COLUMN dlq_events.error_message IS '오류 메시지 (예: NPE, JSON parse 실패 등)';
--- COMMENT ON COLUMN dlq_events.received_at IS 'DLQ 수신 시각';
--- COMMENT ON COLUMN dlq_events.resolved IS '해결 여부 (수동/자동 처리됨)';
--- COMMENT ON COLUMN dlq_events.resolved_at IS '해결된 시각';
---
--- CREATE INDEX idx_dlq_tx_id ON dlq_events(tx_id);
---
--- -- 미 해결된 장애 이벤트 조회시 (PostgreSQL에서 지원하는 Partial Index (부분 인덱스))
--- CREATE INDEX idx_dlq_resolved_false ON dlq_events(resolved) WHERE resolved = false;
+    -- 메타데이터
+                             description TEXT,
+                             created_by VARCHAR(100),
+                             updated_by VARCHAR(100),
+                             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
 
--- ============================================
--- ONCHAIN DOMAIN (Phase-3) 예정....
--- ============================================
+-- JSONB 인덱스 (조건 검색 최적화)
+CREATE INDEX idx_fraud_rules_conditions_gin ON fraud_rules USING GIN (conditions);
+CREATE INDEX idx_fraud_rules_category_priority ON fraud_rules (category_id, priority DESC);
+CREATE INDEX idx_fraud_rules_type_active ON fraud_rules (rule_type, is_active);
+CREATE INDEX idx_fraud_rules_updated_at ON fraud_rules (updated_at);
 
--- CREATE TABLE chains (
---                         code TEXT PRIMARY KEY,
---                         name TEXT NOT NULL,
---                         rpc_url TEXT,
---                         explorer_url TEXT
--- );
--- COMMENT ON TABLE chains IS '블록체인 체인 메타정보';
--- COMMENT ON COLUMN chains.code IS '체인 코드';
--- COMMENT ON COLUMN chains.name IS '체인 이름';
--- COMMENT ON COLUMN chains.rpc_url IS 'RPC URL';
--- COMMENT ON COLUMN chains.explorer_url IS '탐색기 URL';
---
--- CREATE TABLE tokens (
---                         symbol TEXT PRIMARY KEY,
---                         name TEXT NOT NULL,
---                         decimals INT NOT NULL,
---                         contract_address TEXT NOT NULL,
---                         chain_code TEXT NOT NULL
--- );
--- CREATE INDEX idx_tokens_chain_code ON tokens(chain_code);
--- COMMENT ON TABLE tokens IS '온체인 토큰 정보';
--- COMMENT ON COLUMN tokens.symbol IS '토큰 심볼';
--- COMMENT ON COLUMN tokens.name IS '토큰 이름';
--- COMMENT ON COLUMN tokens.decimals IS '소수점 자리수';
--- COMMENT ON COLUMN tokens.contract_address IS '컨트랙트 주소';
--- COMMENT ON COLUMN tokens.chain_code IS '소속 체인 코드';
---
--- CREATE TABLE wallet_transfers (
---                                   id BIGINT PRIMARY KEY,
---                                   tx_id BIGINT NOT NULL,
---                                   from_wallet_id BIGINT NOT NULL,
---                                   to_wallet_id BIGINT NOT NULL,
---                                   to_user_id BIGINT NOT NULL,
---                                   exchange_rate_id BIGINT,
---                                   token_symbol TEXT NOT NULL,
---                                   chain_code TEXT NOT NULL,
---                                   amount NUMERIC(20, 8) NOT NULL,
---                                   status TEXT NOT NULL CHECK (status IN ('REQUESTED', 'PENDING', 'CONFIRMED', 'FAILED')),
---                                   onchain_tx_id TEXT NOT NULL,
---                                   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
--- );
---
--- COMMENT ON TABLE wallet_transfers IS '온체인 지갑 송금';
--- COMMENT ON COLUMN wallet_transfers.id IS '송금 ID';
--- COMMENT ON COLUMN wallet_transfers.tx_id IS '내부 트랜잭션 참조';
--- COMMENT ON COLUMN wallet_transfers.from_wallet_id IS '보낸 지갑';
--- COMMENT ON COLUMN wallet_transfers.to_wallet_id IS '받는 지갑';
--- COMMENT ON COLUMN wallet_transfers.to_user_id IS '수신 사용자';
--- COMMENT ON COLUMN wallet_transfers.exchange_rate_id IS '환율 참조';
--- COMMENT ON COLUMN wallet_transfers.token_symbol IS '토큰 심볼';
--- COMMENT ON COLUMN wallet_transfers.chain_code IS '체인 코드';
--- COMMENT ON COLUMN wallet_transfers.amount IS '금액';
--- COMMENT ON COLUMN wallet_transfers.status IS '송금 상태';
--- COMMENT ON COLUMN wallet_transfers.onchain_tx_id IS '온체인 트랜잭션 ID';
--- COMMENT ON COLUMN wallet_transfers.created_at IS '생성 시각';
---
--- CREATE INDEX idx_wallet_transfers_from_wallet ON wallet_transfers(from_wallet_id);
--- CREATE INDEX idx_wallet_transfers_to_wallet ON wallet_transfers(to_wallet_id);
--- CREATE INDEX idx_wallet_transfers_to_user ON wallet_transfers(to_user_id);
--- CREATE INDEX idx_wallet_transfers_status ON wallet_transfers(status);
--- CREATE INDEX idx_wallet_transfers_tx_hash ON wallet_transfers(onchain_tx_id);
--- CREATE INDEX idx_wallet_transfers_combo ON wallet_transfers(chain_code, token_symbol, status);
---
--- CREATE TYPE onchain_tx_status AS ENUM ('SENT', 'CONFIRMED', 'REORGED', 'DROPPED');
---
--- CREATE TABLE onchain_tx_logs (
---                                  id BIGINT PRIMARY KEY,
---                                  wallet_transfer_id BIGINT NOT NULL,
---                                  tx_hash TEXT NOT NULL,
---                                  status onchain_tx_status NOT NULL,
---                                  confirmed_block INT,
---                                  confirmed_at TIMESTAMPTZ
--- );
---
--- COMMENT ON TABLE onchain_tx_logs IS '온체인 전송 로그';
--- COMMENT ON COLUMN onchain_tx_logs.id IS '로그 ID';
--- COMMENT ON COLUMN onchain_tx_logs.wallet_transfer_id IS '참조 송금 ID';
--- COMMENT ON COLUMN onchain_tx_logs.tx_hash IS '트랜잭션 해시';
--- COMMENT ON COLUMN onchain_tx_logs.status IS '상태';
--- COMMENT ON COLUMN onchain_tx_logs.confirmed_block IS '확정 블록';
--- COMMENT ON COLUMN onchain_tx_logs.confirmed_at IS '확정 시각';
---
--- CREATE INDEX idx_onchain_tx_hash ON onchain_tx_logs(tx_hash);
--- CREATE INDEX idx_onchain_log_composite ON onchain_tx_logs(wallet_transfer_id, status);
+-- 3. 블랙리스트 테이블
+CREATE TYPE list_type_enum AS ENUM ('USER', 'ACCOUNT', 'DEVICE', 'IP', 'PHONE', 'EMAIL');
+CREATE TYPE severity_enum AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+CREATE TABLE fraud_blacklists (
+                                  id BIGSERIAL PRIMARY KEY,
+                                  list_type list_type_enum NOT NULL,
+                                  value VARCHAR(255) NOT NULL,
+                                  reason TEXT,
+                                  severity severity_enum DEFAULT 'MEDIUM',
+                                  expires_at TIMESTAMPTZ NULL,
+                                  is_active BOOLEAN DEFAULT true,
+                                  metadata JSONB DEFAULT '{}', -- 추가 정보 (IP 위치, 디바이스 정보 등)
+                                  created_by VARCHAR(100),
+                                  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                                  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+                                  CONSTRAINT uk_blacklist_type_value UNIQUE (list_type, value)
+);
+
+CREATE INDEX idx_blacklist_type_active ON fraud_blacklists (list_type, is_active);
+CREATE INDEX idx_blacklist_expires_at ON fraud_blacklists (expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_blacklist_value_hash ON fraud_blacklists USING HASH (value); -- 빠른 정확 매치
+
+-- 4. 화이트리스트 테이블
+CREATE TABLE fraud_whitelists (
+                                  id BIGSERIAL PRIMARY KEY,
+                                  list_type list_type_enum NOT NULL,
+                                  value VARCHAR(255) NOT NULL,
+                                  reason TEXT,
+                                  expires_at TIMESTAMPTZ NULL,
+                                  is_active BOOLEAN DEFAULT true,
+                                  metadata JSONB DEFAULT '{}',
+                                  created_by VARCHAR(100),
+                                  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                                  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+                                  CONSTRAINT uk_whitelist_type_value UNIQUE (list_type, value)
+);
+
+CREATE INDEX idx_whitelist_type_active ON fraud_whitelists (list_type, is_active);
+CREATE INDEX idx_whitelist_value_hash ON fraud_whitelists USING HASH (value);
+
+-- 5. 임계값 룰 테이블
+CREATE TYPE threshold_type_enum AS ENUM ('DAILY_AMOUNT', 'MONTHLY_AMOUNT', 'TRANSACTION_COUNT', 'VELOCITY', 'HOURLY_AMOUNT');
+CREATE TYPE user_type_enum AS ENUM ('ALL', 'NEW_USER', 'VERIFIED_USER', 'VIP_USER', 'SUSPICIOUS_USER');
+
+CREATE TABLE fraud_thresholds (
+                                  id BIGSERIAL PRIMARY KEY,
+                                  threshold_type threshold_type_enum NOT NULL,
+                                  user_type user_type_enum DEFAULT 'ALL',
+                                  threshold_value DECIMAL(15,2) NOT NULL,
+                                  time_window_minutes INTEGER,
+                                  risk_score DECIMAL(3,2) DEFAULT 0.50,
+                                  action_type action_type_enum DEFAULT 'ALERT',
+                                  conditions JSONB DEFAULT '{}', -- 추가 조건 (시간대, 지역 등)
+                                  is_active BOOLEAN DEFAULT true,
+                                  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                                  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_thresholds_type_active ON fraud_thresholds (threshold_type, is_active);
+
+-- 6. 룰 실행 히스토리 (파티셔닝 적용)
+CREATE TYPE rule_result_enum AS ENUM ('PASS', 'FAIL', 'ERROR');
+CREATE TYPE action_taken_enum AS ENUM ('NONE', 'BLOCKED', 'ALERTED', 'LOGGED', 'MANUAL_REVIEW');
+
+CREATE TABLE fraud_rule_executions (
+                                       id BIGSERIAL,
+                                       rule_id BIGINT NOT NULL REFERENCES fraud_rules(id),
+                                       transaction_id BIGINT,
+                                       user_id BIGINT,
+                                       rule_result rule_result_enum NOT NULL,
+                                       execution_time_ms INTEGER,
+                                       risk_score_calculated DECIMAL(3,2),
+                                       action_taken action_taken_enum NOT NULL,
+                                       error_message TEXT,
+                                       execution_context JSONB DEFAULT '{}', -- 실행 시점의 컨텍스트 정보
+                                       executed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+                                       PRIMARY KEY (id, executed_at)
+) PARTITION BY RANGE (executed_at);
+
+-- 월별 파티션 생성 (PostgreSQL 10+)
+CREATE TABLE fraud_rule_executions_202501 PARTITION OF fraud_rule_executions
+    FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+CREATE TABLE fraud_rule_executions_202502 PARTITION OF fraud_rule_executions
+    FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
+CREATE TABLE fraud_rule_executions_202503 PARTITION OF fraud_rule_executions
+    FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
+
+-- 파티션별 인덱스
+CREATE INDEX idx_executions_202501_rule_executed ON fraud_rule_executions_202501 (rule_id, executed_at);
+CREATE INDEX idx_executions_202501_transaction ON fraud_rule_executions_202501 (transaction_id);
+
+-- 7. 룰 변경 히스토리 (Audit)
+CREATE TYPE audit_action_enum AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'ACTIVATE', 'DEACTIVATE');
+
+CREATE TABLE fraud_rule_audit_logs (
+                                       id BIGSERIAL PRIMARY KEY,
+                                       rule_id BIGINT NOT NULL REFERENCES fraud_rules(id),
+                                       action_type audit_action_enum NOT NULL,
+                                       old_values JSONB,
+                                       new_values JSONB,
+                                       changed_by VARCHAR(100),
+                                       change_reason TEXT,
+                                       changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_audit_rule_changed_at ON fraud_rule_audit_logs (rule_id, changed_at);
+
+-- 8. 사용자 행동 패턴 캐시 테이블 (PostgreSQL 특화)
+CREATE TABLE user_behavior_cache (
+                                     user_id BIGINT PRIMARY KEY,
+                                     behavior_data JSONB NOT NULL,
+                                     risk_score DECIMAL(3,2),
+                                     last_transaction_at TIMESTAMPTZ,
+                                     daily_amount DECIMAL(15,2) DEFAULT 0,
+                                     daily_count INTEGER DEFAULT 0,
+                                     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_behavior_cache_updated ON user_behavior_cache (updated_at);
+CREATE INDEX idx_behavior_cache_risk ON user_behavior_cache (risk_score DESC);
+
+-- 9. 실시간 거래 속도 추적 테이블
+CREATE TABLE user_velocity_tracking (
+                                        user_id BIGINT,
+                                        transaction_id BIGINT,
+                                        amount DECIMAL(15,2),
+                                        timestamp_ms BIGINT, -- Unix timestamp in milliseconds
+                                        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+                                        PRIMARY KEY (user_id, timestamp_ms)
+);
+
+-- 시계열 데이터를 위한 BRIN 인덱스 (PostgreSQL 특화)
+CREATE INDEX idx_velocity_timestamp_brin ON user_velocity_tracking USING BRIN (timestamp_ms);
+
+-- 10. 초기 데이터 입력
+INSERT INTO fraud_rule_categories (name, description) VALUES
+                                                          ('기본보안', '기본적인 보안 룰 (블랙리스트, 화이트리스트)'),
+                                                          ('거래한도', '거래 금액 및 빈도 관련 룰'),
+                                                          ('행동패턴', '사용자 행동 패턴 기반 룰'),
+                                                          ('시간기반', '시간대별 제한 룰'),
+                                                          ('디바이스', '디바이스 및 위치 기반 룰'),
+                                                          ('속도제한', '거래 속도 기반 룰');
+
+-- 기본 임계값 설정
+INSERT INTO fraud_thresholds (threshold_type, user_type, threshold_value, action_type, conditions) VALUES
+                                                                                                       ('DAILY_AMOUNT', 'ALL', 5000000.00, 'ALERT', '{"currency": "KRW"}'),
+                                                                                                       ('DAILY_AMOUNT', 'NEW_USER', 1000000.00, 'BLOCK', '{"currency": "KRW", "account_age_days": 30}'),
+                                                                                                       ('TRANSACTION_COUNT', 'ALL', 100, 'ALERT', '{"period": "daily"}'),
+                                                                                                       ('VELOCITY', 'ALL', 10, 'ALERT', '{"window_minutes": 10}'),
+                                                                                                       ('HOURLY_AMOUNT', 'ALL', 2000000.00, 'ALERT', '{"currency": "KRW"}');
+
+-- 기본 룰 예시 (JSONB 활용)
+INSERT INTO fraud_rules (category_id, rule_name, rule_type, priority, risk_score, action_type, conditions, description) VALUES
+                                                                                                                            (1, '블랙리스트 사용자 차단', 'BLACKLIST', 100, 1.00, 'BLOCK',
+                                                                                                                             '{"check_type": "user_blacklist", "lists": ["USER"], "strict_mode": true}',
+                                                                                                                             '블랙리스트에 등록된 사용자의 모든 거래 차단'),
+
+                                                                                                                            (2, '고액 거래 알림', 'THRESHOLD', 80, 0.70, 'ALERT',
+                                                                                                                             '{"amount_threshold": 1000000, "currency": "KRW", "check_daily_limit": true}',
+                                                                                                                             '100만원 이상 거래 시 알림'),
+
+                                                                                                                            (4, '심야 시간 거래 제한', 'TIME_BASED', 60, 0.50, 'ALERT',
+                                                                                                                             '{"time_start": "23:00", "time_end": "06:00", "timezone": "Asia/Seoul", "weekend_only": false}',
+                                                                                                                             '심야 시간 (23:00-06:00) 거래 모니터링'),
+
+                                                                                                                            (6, '연속 거래 속도 제한', 'VELOCITY', 70, 0.60, 'ALERT',
+                                                                                                                             '{"max_count": 5, "window_minutes": 10, "min_interval_seconds": 30}',
+                                                                                                                             '10분간 5건 이상 또는 30초 이내 연속 거래 시 알림');
+
+-- PostgreSQL 특화 기능들
+
+-- 1. 자동 업데이트 트리거 함수
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- 2. 업데이트 트리거 적용
+CREATE TRIGGER update_fraud_rules_updated_at BEFORE UPDATE ON fraud_rules
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_fraud_blacklists_updated_at BEFORE UPDATE ON fraud_blacklists
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_fraud_whitelists_updated_at BEFORE UPDATE ON fraud_whitelists
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 3. 룰 조건 검증 함수 (PostgreSQL JSON 함수 활용)
+CREATE OR REPLACE FUNCTION validate_rule_conditions(rule_type rule_type_enum, conditions JSONB)
+    RETURNS BOOLEAN AS $$
+BEGIN
+    CASE rule_type
+        WHEN 'THRESHOLD' THEN
+            RETURN (conditions ? 'amount_threshold') OR (conditions ? 'count_threshold');
+        WHEN 'TIME_BASED' THEN
+            RETURN (conditions ? 'time_start') AND (conditions ? 'time_end');
+        WHEN 'VELOCITY' THEN
+            RETURN (conditions ? 'max_count') AND (conditions ? 'window_minutes');
+        ELSE
+            RETURN true;
+        END CASE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 4. 룰 조건 검증 제약조건 추가
+ALTER TABLE fraud_rules ADD CONSTRAINT check_rule_conditions
+    CHECK (validate_rule_conditions(rule_type, conditions));
+
+-- 5. 만료된 블랙리스트 자동 정리 함수
+CREATE OR REPLACE FUNCTION cleanup_expired_blacklists()
+    RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    UPDATE fraud_blacklists
+    SET is_active = false
+    WHERE expires_at IS NOT NULL
+      AND expires_at < CURRENT_TIMESTAMP
+      AND is_active = true;
+
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6. 주기적 정리 작업을 위한 pg_cron 설정 (확장 설치 필요)
+-- SELECT cron.schedule('cleanup-expired-blacklists', '0 */6 * * *', 'SELECT cleanup_expired_blacklists();');
+
+-- 7. 성능 모니터링을 위한 뷰
+CREATE VIEW fraud_system_stats AS
+SELECT
+    'active_rules' as metric,
+    COUNT(*)::text as value,
+    CURRENT_TIMESTAMP as collected_at
+FROM fraud_rules WHERE is_active = true
+UNION ALL
+SELECT
+    'active_blacklists' as metric,
+    COUNT(*)::text as value,
+    CURRENT_TIMESTAMP as collected_at
+FROM fraud_blacklists WHERE is_active = true
+UNION ALL
+SELECT
+    'executions_today' as metric,
+    COUNT(*)::text as value,
+    CURRENT_TIMESTAMP as collected_at
+FROM fraud_rule_executions
+WHERE executed_at >= CURRENT_DATE;
+
+-- 8. 실시간 통계를 위한 Materialized View
+CREATE MATERIALIZED VIEW fraud_daily_stats AS
+SELECT
+    DATE(executed_at) as date,
+    rule_result,
+    action_taken,
+    COUNT(*) as count,
+    AVG(execution_time_ms) as avg_execution_time,
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY execution_time_ms) as p95_execution_time
+FROM fraud_rule_executions
+WHERE executed_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY DATE(executed_at), rule_result, action_taken
+ORDER BY date DESC;
+
+-- Materialized View 자동 갱신 (pg_cron 사용)
+-- SELECT cron.schedule('refresh-fraud-stats', '*/15 * * * *', 'REFRESH MATERIALIZED VIEW fraud_daily_stats;');
+
+-- 9. 파티션 자동 생성 함수
+CREATE OR REPLACE FUNCTION create_monthly_partition(target_date DATE)
+    RETURNS TEXT AS $$
+DECLARE
+    partition_name TEXT;
+    start_date DATE;
+    end_date DATE;
+BEGIN
+    start_date := DATE_TRUNC('month', target_date);
+    end_date := start_date + INTERVAL '1 month';
+    partition_name := 'fraud_rule_executions_' || TO_CHAR(start_date, 'YYYYMM');
+
+    EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF fraud_rule_executions
+                   FOR VALUES FROM (%L) TO (%L)',
+                   partition_name, start_date, end_date);
+
+    EXECUTE format('CREATE INDEX IF NOT EXISTS idx_%s_rule_executed
+                   ON %I (rule_id, executed_at)',
+                   partition_name, partition_name);
+
+    RETURN partition_name;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 향후 3개월 파티션 미리 생성
+SELECT create_monthly_partition(CURRENT_DATE + (n || ' months')::INTERVAL)
+FROM generate_series(1, 3) n;

@@ -4,8 +4,8 @@ import io.github.hyungkishin.transentia.application.provided.TransactionHistoryR
 import io.github.hyungkishin.transentia.application.required.TransactionHistoryRepository
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.consumer.model.Transaction
-import io.github.hyungkishin.transentia.consumer.model.TransactionHistory
+import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
+import io.github.hyungkishin.transentia.domain.model.transaction.TransactionHistory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional

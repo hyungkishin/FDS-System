@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolation
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.TypeMismatchException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -28,73 +29,101 @@ class GlobalExceptionHandler {
 
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
-    // 도메인 예외 -> HTTP
+    /** 공통: 현재 traceId를 꺼내고 응답 헤더에 세팅 */
+    private fun withTraceHeaders(traceId: String): HttpHeaders =
+        HttpHeaders().apply { add(TraceId.HEADER_NAME, traceId) }
+
+    /** 공통: BAD_REQUEST 헬퍼 */
+    private fun badRequest(code: String, msg: String, detail: Any?) =
+        response(HttpStatus.BAD_REQUEST, code, msg, detail)
+
+    /** 공통: ResponseEntity 생성 (에러 바디에 traceId 포함, 헤더에도 X-Trace-Id 세팅) */
+    private fun response(
+        status: HttpStatus,
+        code: String,
+        message: String,
+        detail: Any?
+    ): ResponseEntity<ErrorResponse> {
+        val traceId = TraceId.getOrNew()
+        val headers = withTraceHeaders(traceId)
+
+        val detailString = when (detail) {
+            null -> null
+            is String -> detail
+            else -> detail.toString()
+        }
+
+        val body = ErrorResponse(
+            code = code,
+            message = message,
+            detail = detailString,
+            traceId = traceId // 에러 바디에는 traceId 포함
+        )
+
+        return ResponseEntity.status(status).headers(headers).body(body)
+    }
+
+    private fun violationMessage(v: ConstraintViolation<*>): String {
+        val field = v.propertyPath?.toString().orEmpty().substringAfterLast('.', v.propertyPath.toString())
+        return "[$field] ${v.message}"
+    }
+
+    private fun safeMessage(e: Throwable): String =
+        if (StringUtils.hasText(e.message)) e.message!! else e.javaClass.simpleName
+
+    // ───────────── domain → http mapping ─────────────
+
     @ExceptionHandler(DomainException::class)
     fun handleDomain(e: DomainException): ResponseEntity<ErrorResponse> {
         val status = when (e.error) {
-            is CommonError.NotFound -> HttpStatus.NOT_FOUND            // 404
-            is CommonError.InvalidArgument -> HttpStatus.BAD_REQUEST          // 400
-            is CommonError.Conflict -> HttpStatus.CONFLICT             // 409
-            is CommonError.PermissionDenied -> HttpStatus.FORBIDDEN            // 403
-            is CommonError.RateLimited -> HttpStatus.TOO_MANY_REQUESTS    // 429
-            is CommonError.Timeout -> HttpStatus.GATEWAY_TIMEOUT      // 504
-            is CommonError.ExternalDependencyError -> HttpStatus.BAD_GATEWAY        // 502
-            else -> HttpStatus.INTERNAL_SERVER_ERROR // 500 기본값
+            is CommonError.NotFound -> HttpStatus.NOT_FOUND
+            is CommonError.InvalidArgument -> HttpStatus.BAD_REQUEST
+            is CommonError.Conflict -> HttpStatus.CONFLICT
+            is CommonError.PermissionDenied -> HttpStatus.FORBIDDEN
+            is CommonError.RateLimited -> HttpStatus.TOO_MANY_REQUESTS
+            is CommonError.Timeout -> HttpStatus.GATEWAY_TIMEOUT
+            is CommonError.ExternalDependencyError -> HttpStatus.BAD_GATEWAY
+            else -> HttpStatus.INTERNAL_SERVER_ERROR
         }
 
-        // (선택) 4xx는 warn, 5xx는 error
         if (status.is5xxServerError) {
             logger.error("DomainException: code={}, message={}, detail={}", e.error.code, e.error.message, e.detail, e)
         } else {
             logger.warn("DomainException: code={}, message={}, detail={}", e.error.code, e.error.message, e.detail)
         }
 
-        return ResponseEntity.status(status).body(
-            ErrorResponse(
-                code = e.error.code,
-                message = e.error.message,
-                // detail이 있으면 내려주고, 없으면 meta만
-                detail = e.detail,
-                additionalInfo = e.error.meta,
-                traceId = TraceId.getOrNew()
-            )
-        )
+        return response(status, e.error.code, e.error.message, e.detail)
     }
 
-    /**
-     * 스프링/웹 표준 예외
-     */
     @ExceptionHandler(ConstraintViolationException::class)
-    fun handle(e: ConstraintViolationException): ResponseEntity<ErrorResponse> {
-        val detail = e.constraintViolations.map(::violationMessage)
-        return badRequest("invalid_request_param", "유효하지 않은 요청 파라미터입니다.", detail)
-    }
+    fun handle(e: ConstraintViolationException) =
+        badRequest("invalid_request_param", "유효하지 않은 요청 파라미터입니다.", e.constraintViolations.map(::violationMessage))
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
-    fun handle(e: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
-        val detail = e.bindingResult.fieldErrors.map {
-            val v = it.unwrap(ConstraintViolation::class.java)
-            violationMessage(v)
-        }
-        return badRequest("invalid_request_body", "요청 본문 검증에 실패했습니다.", detail)
-    }
+    fun handle(e: MethodArgumentNotValidException) =
+        badRequest("invalid_request_body", "요청 본문 검증에 실패했습니다.",
+            e.bindingResult.fieldErrors.map {
+                val v = it.unwrap(ConstraintViolation::class.java)
+                violationMessage(v)
+            }
+        )
 
     @ExceptionHandler(BindException::class)
-    fun handle(e: BindException): ResponseEntity<ErrorResponse> {
-        val detail = e.fieldErrors.map { fe ->
-            if (fe.contains(ConstraintViolation::class.java)) {
-                violationMessage(fe.unwrap(ConstraintViolation::class.java))
-            } else fe.defaultMessage ?: "[${fe.field}] invalid value"
-        }
-        return badRequest("invalid_request_param", "요청 파라미터 바인딩에 실패했습니다.", detail)
-    }
+    fun handle(e: BindException) =
+        badRequest("invalid_request_param", "요청 파라미터 바인딩에 실패했습니다.",
+            e.fieldErrors.map { fe ->
+                if (fe.contains(ConstraintViolation::class.java)) {
+                    violationMessage(fe.unwrap(ConstraintViolation::class.java))
+                } else fe.defaultMessage ?: "[${fe.field}] invalid value"
+            }
+        )
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handle(e: HttpMessageNotReadableException) =
         badRequest("invalid_request_body", "요청 본문을 읽을 수 없습니다.", e.message)
 
     @ExceptionHandler
-    fun handle(e: MissingServletRequestParameterException): ResponseEntity<ErrorResponse> =
+    fun handle(e: MissingServletRequestParameterException) =
         badRequest("missing_request_param", "[${e.parameterName}] 필수값입니다.", null)
 
     @ExceptionHandler(TypeMismatchException::class)
@@ -127,7 +156,6 @@ class GlobalExceptionHandler {
     fun handle(e: RestClientException) =
         response(HttpStatus.BAD_GATEWAY, "api_call_error", "외부 API 호출 실패", e.message)
 
-    // 3) 그 외 모든 예외
     @ExceptionHandler(NullPointerException::class)
     fun handle(e: NullPointerException) =
         response(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", safeMessage(e), null)
@@ -135,39 +163,4 @@ class GlobalExceptionHandler {
     @ExceptionHandler(Exception::class)
     fun handle(e: Exception) =
         response(HttpStatus.INTERNAL_SERVER_ERROR, "unhandled_error", safeMessage(e), null)
-
-    /**
-     * helper methods
-     */
-
-    private fun badRequest(code: String, msg: String, detail: Any?) =
-        response(HttpStatus.BAD_REQUEST, code, msg, detail)
-
-    private fun response(
-        status: HttpStatus,
-        code: String,
-        message: String,
-        detail: Any?
-    ): ResponseEntity<ErrorResponse> {
-        return ResponseEntity.status(status).body(
-            ErrorResponse(
-                code = code,
-                message = message,
-                detail = when (detail) {
-                    null -> null
-                    is String -> detail
-                    else -> detail.toString()
-                },
-                traceId = TraceId.getOrNew()
-            )
-        )
-    }
-
-    private fun violationMessage(v: ConstraintViolation<*>): String {
-        val field = v.propertyPath?.toString().orEmpty().substringAfterLast('.', v.propertyPath.toString())
-        return "[$field] ${v.message}"
-    }
-
-    private fun safeMessage(e: Throwable): String =
-        if (StringUtils.hasText(e.message)) e.message!! else e.javaClass.simpleName
 }

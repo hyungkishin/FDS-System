@@ -38,7 +38,7 @@ class ApiResponseBodyAdvice(
             StreamingResponseBody::class.java.isAssignableFrom(clazz) -> false
             clazz == String::class.java -> false
             clazz == Void.TYPE -> false
-            else -> true // ★ ResponseEntity 포함
+            else -> true
         }
     }
 
@@ -71,7 +71,6 @@ class ApiResponseBodyAdvice(
             return ResponseEntity.status(body.statusCode).headers(body.headers).body(wrapped)
         }
 
-        // 일반 DTO → 래핑
-        return ApiCommonResponse(data = body, traceId = TraceId.getOrNew())
+        return ApiCommonResponse(data = body)
     }
 }

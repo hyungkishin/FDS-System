@@ -41,6 +41,9 @@ class TransferEventsOutboxJdbcRepository(
         )
     }
 
+    /**
+     * Lock
+     */
     fun claimBatch(limit: Int): List<ClaimedRow> {
         val sql = """
           WITH grabbed AS (

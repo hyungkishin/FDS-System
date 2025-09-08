@@ -26,7 +26,8 @@ class TransferController(
 //        idem: String,
         @Valid @RequestBody request: TransferRequest
     ): TransferResponse {
-        val result = registerTransaction.create(request.toCommand())
+        val senderId = 10001L
+        val result = registerTransaction.create(request.toCommand(senderId))
         return TransferResponse.of(result)
     }
 
