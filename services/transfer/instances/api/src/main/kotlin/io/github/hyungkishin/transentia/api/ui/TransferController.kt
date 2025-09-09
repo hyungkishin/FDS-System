@@ -36,7 +36,7 @@ class TransferController(
      */
     @GetMapping("/{transactionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun get(@PathVariable transactionId: Long): TransferResponse {
-        val res = registerTransaction.get(transactionId)
+        val res = registerTransaction.findTransaction(transactionId)
         return TransferResponse.of(res)
     }
 

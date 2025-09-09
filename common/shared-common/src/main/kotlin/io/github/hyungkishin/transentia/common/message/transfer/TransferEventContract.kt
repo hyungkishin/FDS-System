@@ -4,24 +4,20 @@ import java.time.Instant
 
 // 송금시, 공용 이벤트 계약 ( - 원시 타입만 wrapping 하지 않는다. )
 sealed interface TransferEventContract {
-    val schemaVersion: Int
     val occurredAt: Instant
-    val txId: Long
+    val transactionId: Long
 }
 
-data class TransferCompletedV1(
-    override val txId: Long,
+data class TransferCompleted(
+    override val transactionId: Long,
     val senderUserId: Long,
     val receiverUserId: Long,
-    val amountMinor: Long, // Money 객체 rawValue (scale = 8)
-    val currency: String = "KRW",
+    val amount: Long, // Money 객체 rawValue (scale = 8)
     override val occurredAt: Instant = Instant.now(),
-    override val schemaVersion: Int = 1
 ) : TransferEventContract
 
-data class TransferFailedV1(
-    override val txId: Long,
+data class TransferFailed(
+    override val transactionId: Long,
     val reason: String,
     override val occurredAt: Instant = Instant.now(),
-    override val schemaVersion: Int = 1
 ) : TransferEventContract
