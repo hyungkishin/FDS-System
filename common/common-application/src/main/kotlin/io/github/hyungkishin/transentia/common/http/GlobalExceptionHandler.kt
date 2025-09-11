@@ -2,10 +2,10 @@ package io.github.hyungkishin.transentia.common.http
 
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
-import io.github.hyungkishin.transentia.common.trace.TraceId
 import jakarta.validation.ConstraintViolation
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.beans.TypeMismatchException
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -23,15 +23,19 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.client.RestClientException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import java.util.UUID
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
+    private fun getCurrentTraceId(): String =
+        MDC.get("traceId") ?: UUID.randomUUID().toString()
+
     /** 공통: 현재 traceId를 꺼내고 응답 헤더에 세팅 */
     private fun withTraceHeaders(traceId: String): HttpHeaders =
-        HttpHeaders().apply { add(TraceId.HEADER_NAME, traceId) }
+        HttpHeaders().apply { add("X-Trace-Id", traceId) }
 
     /** 공통: BAD_REQUEST 헬퍼 */
     private fun badRequest(code: String, msg: String, detail: Any?) =
@@ -44,7 +48,7 @@ class GlobalExceptionHandler {
         message: String,
         detail: Any?
     ): ResponseEntity<ErrorResponse> {
-        val traceId = TraceId.getOrNew()
+        val traceId = getCurrentTraceId()
         val headers = withTraceHeaders(traceId)
 
         val detailString = when (detail) {

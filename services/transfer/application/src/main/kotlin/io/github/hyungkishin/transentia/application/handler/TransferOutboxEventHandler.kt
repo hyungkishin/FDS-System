@@ -2,15 +2,16 @@ package io.github.hyungkishin.transentia.application.handler
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.hyungkishin.transentia.application.required.TransferEventsOutboxRepository
-import io.github.hyungkishin.transentia.application.required.outbox.TransferEvent
+import io.github.hyungkishin.transentia.domain.event.TransferEvent
 import io.github.hyungkishin.transentia.common.message.transfer.TransferCompleted
 import io.github.hyungkishin.transentia.common.message.transfer.TransferFailed
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
-import io.github.hyungkishin.transentia.common.trace.TraceId
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
+import java.util.UUID
 
 @Component
 class TransferOutboxEventHandler(
@@ -74,12 +75,15 @@ class TransferOutboxEventHandler(
                 mapOf(
                     "eventType" to eventVersion,
                     "eventVersion" to "v1",
-                    "traceId" to TraceId.getOrNew(),
+                    "traceId" to currentTraceId(),
                     "producer" to "transfer-api",
                     "contentType" to "application/json"
                 )
             )
         )
     }
+
+    private fun currentTraceId(): String =
+        MDC.get("traceId") ?: UUID.randomUUID().toString()
 
 }

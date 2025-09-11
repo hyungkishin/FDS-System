@@ -20,13 +20,13 @@ val kotlinVersion = "1.9.25"
 val bootApps = setOf("transfer-api", "transfer-relay", "transfer-publisher", "transfer-consumer")
 // Spring 관련 플러그인 필요한 모듈
 val springModules =
-    setOf("transfer-api", "transfer-relay", "transfer-publisher", "transfer-consumer", "transfer-infra", "delivery-http-error")
+    setOf("transfer-api", "transfer-relay", "transfer-publisher", "transfer-consumer", "transfer-infra", "common-application")
 
 // JPA 필요한 모듈
 val jpaModules = setOf("transfer-infra")
 
 // 순수 Kotlin 모듈
-val pureKotlinModules = setOf("shared-common", "transfer-domain", "transfer-application")
+val pureKotlinModules = setOf("common-domain", "transfer-domain", "transfer-application")
 
 val kspModules = emptySet<String>() // ksp 쓰는 모듈 있으면 이름 추가
 

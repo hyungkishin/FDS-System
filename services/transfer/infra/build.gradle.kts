@@ -7,7 +7,7 @@ plugins {
 dependencies {
     implementation(project(":transfer-application"))
     implementation(project(":transfer-domain"))
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
 
     // Spring Data JPA & JDBC (RDB 어댑터 구현)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")

@@ -42,8 +42,8 @@ project(":transfer-relay").projectDir = file("services/transfer/instances/transf
 include("fds-consumer")
 project(":fds-consumer").projectDir = file("services/fds/instances/consumer")
 
-include("delivery-http-error")
-project(":delivery-http-error").projectDir = file("common/delivery-http-error")
+include("common-application")
+project(":common-application").projectDir = file("common/common-application")
 
-include("shared-common")
-project(":shared-common").projectDir = file("common/shared-common")
+include("common-domain")
+project(":common-domain").projectDir = file("common/common-domain")

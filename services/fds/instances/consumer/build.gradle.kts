@@ -6,7 +6,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
     implementation(project(":fds-infra"))
 
     implementation("org.springframework.boot:spring-boot-starter")

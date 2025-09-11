@@ -42,3 +42,9 @@ app:
   relay:
     enabled: false
   transfer.topic: transfer.events.v1
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
