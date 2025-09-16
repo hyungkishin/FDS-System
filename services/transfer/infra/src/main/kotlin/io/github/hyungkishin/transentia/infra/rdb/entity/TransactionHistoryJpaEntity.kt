@@ -1,12 +1,9 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 
-import io.github.hyungkishin.transentia.domain.enums.TransactionHistoryStatus
 import io.github.hyungkishin.transentia.domain.model.transaction.TransactionHistory
 import jakarta.persistence.*
 import org.hibernate.Hibernate
-import org.hibernate.annotations.JdbcTypeCode
-import org.hibernate.type.SqlTypes
 import java.time.Instant
 
 @Entity
@@ -26,11 +23,6 @@ class TransactionHistoryJpaEntity(
     @Column(name = "transaction_id", nullable = false)
     val transactionId: Long, // Snowflake
 
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "status", nullable = false)
-    val status: TransactionHistoryStatus,
-
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     val createdAt: Instant = Instant.now()
 ) {
@@ -40,7 +32,6 @@ class TransactionHistoryJpaEntity(
             TransactionHistoryJpaEntity(
                 id = domain.id.value,
                 transactionId = domain.transactionId.value,
-                status = domain.status,
             )
     }
 

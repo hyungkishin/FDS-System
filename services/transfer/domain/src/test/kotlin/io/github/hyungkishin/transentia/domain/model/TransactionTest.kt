@@ -58,12 +58,5 @@ class TransactionTest {
         }
     }
 
-    @Test
-    fun `PENDING 상태의 트랜잭션은 FAIL 처리할 수 있다`() {
-        val tx = Transaction.of(SnowFlakeId(105L), sender, receiver, amount)
-
-        assertEquals(TransactionStatus.FAILED, tx.status)
-    }
-
 }
 
