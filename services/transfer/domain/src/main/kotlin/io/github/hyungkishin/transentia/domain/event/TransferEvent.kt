@@ -1,4 +1,6 @@
-package io.github.hyungkishin.transentia.application.required.outbox
+package io.github.hyungkishin.transentia.domain.event
+
+import io.github.hyungkishin.transentia.common.event.DomainEvent
 
 data class TransferEvent(
     val eventId: Long,
@@ -7,4 +9,4 @@ data class TransferEvent(
     val eventType: String,
     val payload: String,   // JSON
     val headers: String    // JSON (traceId 등)
-)
+) : DomainEvent<TransferEvent>

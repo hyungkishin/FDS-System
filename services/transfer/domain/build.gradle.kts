@@ -3,5 +3,5 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
 }

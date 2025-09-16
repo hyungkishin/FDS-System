@@ -2,7 +2,6 @@ package io.github.hyungkishin.transentia.common.http.model
 
 import io.github.hyungkishin.transentia.common.http.ErrorResponse
 import io.github.hyungkishin.transentia.common.http.NoWrap
-import io.github.hyungkishin.transentia.common.trace.TraceId
 import org.springframework.core.MethodParameter
 import org.springframework.core.io.Resource
 import org.springframework.http.MediaType

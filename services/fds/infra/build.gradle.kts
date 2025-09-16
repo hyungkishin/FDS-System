@@ -7,7 +7,7 @@ plugins {
 dependencies {
     implementation(project(":fds-application"))
     implementation(project(":fds-domain"))
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
 
     // Spring Data JPA & JDBC (RDB 어댑터 구현)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")

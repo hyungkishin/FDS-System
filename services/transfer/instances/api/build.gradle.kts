@@ -8,8 +8,8 @@ plugins {
 dependencies {
     implementation(project(":transfer-application"))
     implementation(project(":transfer-infra"))
-    implementation(project(":delivery-http-error"))
-    implementation(project(":shared-common"))
+    implementation(project(":common-application"))
+    implementation(project(":common-domain"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")

@@ -4,12 +4,15 @@ plugins {
 }
 
 dependencies {
-    // 소비 모듈에 전파돼야 하니 api 로 두는 게 맞음
     api("org.springframework.boot:spring-boot-starter-web")
     api("org.springframework.boot:spring-boot-starter-validation")
     api("org.springframework.boot:spring-boot-autoconfigure")
 
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
+
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave")
 
     compileOnly("org.springframework.boot:spring-boot-configuration-processor")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
