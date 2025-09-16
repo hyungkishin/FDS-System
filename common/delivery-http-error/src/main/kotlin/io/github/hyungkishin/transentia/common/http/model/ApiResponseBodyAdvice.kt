@@ -2,9 +2,11 @@ package io.github.hyungkishin.transentia.common.http.model
 
 import io.github.hyungkishin.transentia.common.http.ErrorResponse
 import io.github.hyungkishin.transentia.common.http.NoWrap
+import io.github.hyungkishin.transentia.common.trace.TraceId
 import org.springframework.core.MethodParameter
 import org.springframework.core.io.Resource
-import org.springframework.http.*
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
@@ -48,7 +50,7 @@ class ApiResponseBodyAdvice(
         request: ServerHttpRequest,
         response: ServerHttpResponse
     ): Any? {
-        val req  = request as? ServletServerHttpRequest
+        val req = request as? ServletServerHttpRequest
         val resp = response as? ServletServerHttpResponse
 
         // 도메인별 커스터마이징 실행 (상태/헤더 자동 설정 등)
@@ -61,7 +63,7 @@ class ApiResponseBodyAdvice(
         if (body is ErrorResponse || body is Resource || body is StreamingResponseBody) return body
         if (body is ApiCommonResponse<*>) return body
 
-        // ★ ResponseEntity → 바디만 래핑, 헤더/상태 보존
+        // 바디만 래핑, 헤더/상태 보존
         if (body is ResponseEntity<*>) {
             val inner = body.body ?: return body
             if (inner is ErrorResponse || inner is ApiCommonResponse<*>) return body
@@ -70,6 +72,6 @@ class ApiResponseBodyAdvice(
         }
 
         // 일반 DTO → 래핑
-        return ApiCommonResponse(data = body)
+        return ApiCommonResponse(data = body, traceId = TraceId.getOrNew())
     }
 }

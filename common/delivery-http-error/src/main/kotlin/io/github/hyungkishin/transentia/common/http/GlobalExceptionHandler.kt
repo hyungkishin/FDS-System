@@ -2,6 +2,7 @@ package io.github.hyungkishin.transentia.common.http
 
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
+import io.github.hyungkishin.transentia.common.trace.TraceId
 import jakarta.validation.ConstraintViolation
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
@@ -54,7 +55,8 @@ class GlobalExceptionHandler {
                 message = e.error.message,
                 // detail이 있으면 내려주고, 없으면 meta만
                 detail = e.detail,
-                additionalInfo = e.error.meta
+                additionalInfo = e.error.meta,
+                traceId = TraceId.getOrNew()
             )
         )
     }
@@ -62,7 +64,6 @@ class GlobalExceptionHandler {
     /**
      * 스프링/웹 표준 예외
      */
-
     @ExceptionHandler(ConstraintViolationException::class)
     fun handle(e: ConstraintViolationException): ResponseEntity<ErrorResponse> {
         val detail = e.constraintViolations.map(::violationMessage)
@@ -147,8 +148,8 @@ class GlobalExceptionHandler {
         code: String,
         message: String,
         detail: Any?
-    ): ResponseEntity<ErrorResponse> =
-        ResponseEntity.status(status).body(
+    ): ResponseEntity<ErrorResponse> {
+        return ResponseEntity.status(status).body(
             ErrorResponse(
                 code = code,
                 message = message,
@@ -156,9 +157,11 @@ class GlobalExceptionHandler {
                     null -> null
                     is String -> detail
                     else -> detail.toString()
-                }
+                },
+                traceId = TraceId.getOrNew()
             )
         )
+    }
 
     private fun violationMessage(v: ConstraintViolation<*>): String {
         val field = v.propertyPath?.toString().orEmpty().substringAfterLast('.', v.propertyPath.toString())
