@@ -79,12 +79,11 @@ services:
     depends_on:
       kafka:
         condition: service_healthy                       # 브로커가 살아있을 때만 토픽 생성 시도
-    entrypoint: [ "/bin/bash","-lc" ]                      # 멀티 커맨드/셸 파이프 사용 위해 bash -lc
     command: >
-      /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092
-      --create --if-not-exists --topic transfer-events --partitions 24 --replication-factor 1 &&
+      bash -c "
+      /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic transfer-events.v1 --partitions 8 --replication-factor 1 &&
       echo 'topics created'
-      # 자동생성 OFF 이므로 명시 생성. 파티션=24는 '컨슈머 동시성×2' 출발점 가이드
+      "
     restart: "no"                                        # 초기화 1회만 실행
 
   kafka-ui:
@@ -99,6 +98,20 @@ services:
     depends_on:
       kafka:
         condition: service_healthy                       # 브로커 준비 후 UI 기동
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest
+    container_name: transfer-schema-registry
+    restart: unless-stopped
+    ports:
+      - "8085:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    depends_on:
+      kafka:
+        condition: service_healthy
 
 volumes:
   pg_data:                                               # Postgres 데이터 영속 볼륨

@@ -28,15 +28,8 @@ class SpringLibraryConventionPlugin : Plugin<Project> {
 
         // 공통 의존성
         dependencies {
-            // Spring Boot BOM
-            add("implementation", platform("org.springframework.boot:spring-boot-dependencies:3.3.2"))
-
-            // Kotest BOM
-            add("testImplementation", platform("io.kotest:kotest-bom:5.9.1"))
-
             add("implementation", "org.jetbrains.kotlin:kotlin-reflect")
-
-            // 공통 Spring 테스트 의존성
+            add("testImplementation", platform("io.kotest:kotest-bom:5.9.1"))
             add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
         }
     }

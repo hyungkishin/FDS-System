@@ -7,30 +7,34 @@ spring:
     username: postgres
     password: pass1234
     driver-class-name: org.postgresql.Driver
-    hikari:  # Relay는 배치 처리 특성상 적은 커넥션으로 충분
+    hikari:
       maximum-pool-size: 10
       minimum-idle: 3
       connection-timeout: 3000
       idle-timeout: 600000
       max-lifetime: 1800000
-      leak-detection-threshold: 30000  # 30초 (더 엄격하게)
-
-  kafka:
-    bootstrap-servers: host.docker.internal:9094
-    producer:
-      batch-size: 32768
-      linger-ms: 10
-      buffer-memory: 67108864
-      compression-type: lz4
-      acks: 1
-      retries: 3
-      max-in-flight-requests-per-connection: 5
-      client-id: transfer-relay
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      leak-detection-threshold: 30000
 
 server:
   port: 8081
+
+kafka-config:
+  bootstrap-servers: host.docker.internal:9094
+  schema-registry-url-key: schema.registry.url
+  schema-registry-url: http://localhost:8085
+  num-of-partitions: 3
+  replication-factor: 1
+
+kafka-producer-config:
+  key-serializer-class: org.apache.kafka.common.serialization.StringSerializer
+  value-serializer-class: io.confluent.kafka.serializers.KafkaAvroSerializer
+  compression-type: lz4
+  acks: "1"
+  batch-size: 32768
+  batch-size-boost-factor: 1
+  linger-ms: 10
+  request-timeout-ms: 60000
+  retry-count: 3
 
 app:
   relay:
@@ -40,5 +44,10 @@ app:
       batchSize: 300
       fixedDelayMs: 500
       baseBackoffMs: 1000
-  transfer:
-    topic: transfer.events.v1
+  kafka:
+    topics:
+      transfer-events: transfer-events.v1
+
+management:
+  tracing:
+    enabled: false

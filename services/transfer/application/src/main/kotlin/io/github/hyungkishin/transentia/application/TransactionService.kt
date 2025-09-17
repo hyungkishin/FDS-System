@@ -37,7 +37,7 @@ class TransactionService(
             "수신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.receiverAccountNumber}"
         )
 
-        // TODO: 배치 서버 생성 + 비관적 Lock 으로 User 의 일일 송금액 검증 필요
+        // TODO: 배치 서버 생성 + 비관적 Lock 으로 User 의 일일 송금액 검증 필요 ...?
         // - 테스트의 용이성과 확장성 / 재사용성
         TransferValidator.validate(sender, receiver, command.amount())
 
@@ -58,8 +58,7 @@ class TransactionService(
 
         // LOG: CDC / Date
         val savedTransaction = transactionRepository.save(transaction)
-        transactionHistoryService.saveTransferHistory(savedTransaction) // History 는 mongoDb
-
+//        transactionHistoryService.saveTransferHistory(savedTransaction) // History 는 mongoDb
         // TODO : outboxHelper.save(transaction)
         eventPublisher.publishEvent(completeEvent)
 

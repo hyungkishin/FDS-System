@@ -64,6 +64,7 @@ class TransferEventsOutboxJdbcRepository(
           RETURNING t.event_id, t.aggregate_id, t.payload::text AS payload, t.headers::text AS headers
         """.trimIndent()
 
+         // payload 에 담겨있는 JSON = {"amount": 500000000000, "status": "COMPLETED", "senderId": 10001, "occurredAt": 1758142742082, "receiverId": 10002, "transactionId": 226809262431539200}
         val mapper = RowMapper { rs, _ ->
             ClaimedRow(
                 eventId = rs.getLong("event_id"),
