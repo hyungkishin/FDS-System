@@ -14,14 +14,6 @@ class KafkaConventionPlugin : Plugin<Project> {
         pluginManager.apply("org.jetbrains.kotlin.plugin.allopen")
         pluginManager.apply("org.jetbrains.kotlin.plugin.spring")
 
-        // 저장소 추가 - 올바른 Gradle Kotlin DSL 문법 사용
-        repositories.apply {
-            mavenCentral()
-            maven {
-                url = uri("https://packages.confluent.io/maven/")
-            }
-        }
-
         // 공통 의존성
         dependencies {
             add("implementation", "org.springframework.boot:spring-boot-starter")

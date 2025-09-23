@@ -32,16 +32,34 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.kafka: INFO
 
+kafka-config:
+  bootstrap-servers: host.docker.internal:9094
+  schema-registry-url-key: schema.registry.url
+  schema-registry-url: http://localhost:8085
+  num-of-partitions: 3
+  replication-factor: 1
+
+kafka-producer-config:
+  keySerializerClass: org.apache.kafka.common.serialization.StringSerializer
+  valueSerializerClass: io.confluent.kafka.serializers.KafkaAvroSerializer
+  compressionType: lz4
+  acks: "1"
+  batchSize: 65536        # 64KB로 증가
+  batchSizeBoostFactor: 1
+  lingerMs: 5             # 배치 대기 시간
+  requestTimeoutMs: 1000  # 1초로 단축
+  retryCount: 0           # 재시도 없음 (빠른 실패)
+
+app:
+  kafka:
+    topics:
+      transfer-events: transfer-events.v1
+
 id:
   snowflake:
     node-id: ${SNOWFLAKE_NODE_ID:1}
     custom-epoch: 1704067200000
     max-clock-backward-ms: 5
-
-app:
-  relay:
-    enabled: false
-  transfer.topic: transfer.events.v1
 
 management:
   tracing:

@@ -1,78 +1,118 @@
 package io.github.hyungkishin.transentia.relay
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import io.github.hyungkishin.transentia.infra.rdb.adapter.TransferEventsOutboxJdbcRepository
-import io.github.hyungkishin.transentia.infrastructure.kafka.model.TransferEventAvroModel
-import io.github.hyungkishin.transentia.infrastructure.kafka.model.TransferEventType
-import io.github.hyungkishin.transentia.infrastructure.kafka.model.TransferStatus
-import io.github.hyungkishin.transentia.infrastructure.kafka.producer.service.KafkaProducer
+import io.github.hyungkishin.transentia.application.required.TransferEventsOutboxRepository
+import io.github.hyungkishin.transentia.relay.component.EventBatchProcessor
+import io.github.hyungkishin.transentia.relay.component.RetryPolicyHandler
+import io.github.hyungkishin.transentia.relay.config.OutboxRelayConfig
+import io.github.hyungkishin.transentia.relay.model.ProcessingResult
+import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.kafka.support.SendResult
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.util.concurrent.ExecutorService
 
+/**
+ * 리팩토링된 Outbox Relay
+ *
+ * 스케줄링과 전체 플로우 조정
+ * 실제 처리는 각 전담 클래스에 위임
+ */
 @Component
 class TransferOutboxRelay(
-    private val outboxRepository: TransferEventsOutboxJdbcRepository,
-    private val kafkaProducer: KafkaProducer<String, TransferEventAvroModel>,
-    private val objectMapper: ObjectMapper,
-    @Value("\${app.outbox.relay.batchSize:300}") private val batchSize: Int,
-    @Value("\${app.outbox.relay.baseBackoffMs:1000}") private val baseBackoffMs: Long,
+    private val outboxRepository: TransferEventsOutboxRepository,
+    private val eventBatchProcessor: EventBatchProcessor,
+    private val retryPolicyHandler: RetryPolicyHandler,
+    private val config: OutboxRelayConfig,
+    @Qualifier("outboxExecutorService") private val executorService: ExecutorService,
     @Value("\${app.kafka.topics.transfer-events}") private val topicName: String
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(fixedDelayString = "\${app.outbox.relay.fixedDelayMs:1000}")
     fun run() {
-        val batch = outboxRepository.claimBatch(batchSize)
-        if (batch.isEmpty()) return
+        try {
+            val startTime = System.currentTimeMillis()
 
-        val successIds = mutableListOf<Long>()
-        var failed = 0
+            // 배치 조회
+            val batch = outboxRepository.claimBatch(config.batchSize)
+            if (batch.isEmpty()) return
 
-        batch.forEach { row ->
-            try {
-                val payloadData = objectMapper.readValue(row.payload, Map::class.java)
+            // 배치 처리
+            val result = eventBatchProcessor.processBatch(
+                batch = batch,
+                topicName = topicName,
+                timeoutSeconds = config.timeoutSeconds
+            )
 
-                val avroModel = TransferEventAvroModel.newBuilder()
-                    .setEventId(row.eventId)
-                    .setEventType(TransferEventType.TRANSFER_COMPLETED)
-                    .setAggregateId(row.aggregateId)
-                    .setTransactionId(payloadData["transactionId"] as? Long ?: 0L)
-                    .setSenderId(payloadData["senderId"] as? Long ?: 0L)
-                    .setReceiverId(payloadData["receiverId"] as? Long ?: 0L)
-                    .setAmount(payloadData["amount"]?.toString() ?: "0")
-                    .setStatus(TransferStatus.valueOf(payloadData["status"] as? String ?: "COMPLETED"))
-                    .setOccurredAt(payloadData["occurredAt"] as? Long ?: System.currentTimeMillis())
-                    .setHeaders(row.headers ?: "{}")
-                    .setCreatedAt(System.currentTimeMillis())
-                    .build()
+            val processingTime = System.currentTimeMillis() - startTime
 
-                // Infrastructure KafkaProducer 사용
-                kafkaProducer.send(
-                    topicName = topicName,
-                    key = row.aggregateId,
-                    message = avroModel,
-                    callback = { _: SendResult<String, TransferEventAvroModel>?, ex: Throwable? ->
-                        if (ex != null) {
-                            log.error("Kafka callback error for eventId={}: {}", row.eventId, ex.message)
-                        } else {
-                            log.debug("Event published successfully: eventId={}", row.eventId)
-                        }
-                    }
-                )
-                successIds += row.eventId
-            } catch (e: Exception) {
-                outboxRepository.markFailedWithBackoff(row.eventId, e.message, baseBackoffMs)
-                failed++
-                log.error("outbox publish failed id={}, cause={}", row.eventId, e.message)
+            // 성공 처리
+            if (result.successIds.isNotEmpty()) {
+                outboxRepository.markAsPublished(result.successIds)
+                log.debug("Published {} events ({}% success) in {}ms",
+                    result.successIds.size,
+                    "%.1f".format(result.successRate * 100),
+                    processingTime)
             }
-        }
 
-        if (successIds.isNotEmpty()) outboxRepository.deleteSucceeded(successIds)
-        if (successIds.isNotEmpty() || failed > 0) {
-            log.info("relay batch done: success={}, failed={}", successIds.size, failed)
+            // 실패 처리
+            handleFailedEvents(result.failedEvents)
+
+            // 성능 모니터링
+            monitorPerformance(processingTime, result.totalProcessed)
+
+        } catch (e: Exception) {
+            log.error("Outbox relay batch processing failed", e)
+        }
+    }
+
+    /**
+     * 실패한 이벤트들에 백오프 적용
+     */
+    private fun handleFailedEvents(failedEvents: List<ProcessingResult.FailedEvent>) {
+        if (failedEvents.isEmpty()) return
+
+        log.warn("Failed to publish {} events", failedEvents.size)
+
+        failedEvents.forEach { failed ->
+            val backoff = retryPolicyHandler.calculateBackoff(failed.attemptCount)
+            outboxRepository.markFailedWithBackoff(failed.eventId, failed.error, backoff)
+        }
+    }
+
+    /**
+     * 성능 모니터링 및 경고
+     */
+    private fun monitorPerformance(processingTime: Long, totalProcessed: Int) {
+        if (processingTime > config.slowProcessingThresholdMs) {
+            log.warn("Slow batch processing: {}ms for {} events (threshold: {}ms)",
+                processingTime, totalProcessed, config.slowProcessingThresholdMs)
+        }
+    }
+
+    /**
+     * 애플리케이션 종료 시 정리 작업
+     */
+    @PreDestroy
+    fun cleanup() {
+        log.info("Shutting down outbox relay executor service")
+        executorService.shutdown()
+
+        try {
+            if (!executorService.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                log.warn("Executor did not terminate gracefully, forcing shutdown")
+                executorService.shutdownNow()
+
+                if (!executorService.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS)) {
+                    log.error("Executor did not terminate after forced shutdown")
+                }
+            }
+        } catch (e: InterruptedException) {
+            log.warn("Interrupted while waiting for executor termination")
+            executorService.shutdownNow()
+            Thread.currentThread().interrupt()
         }
     }
 }

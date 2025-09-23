@@ -8,17 +8,20 @@ dependencies {
     implementation(project(":transfer-application"))
     implementation(project(":transfer-domain"))
     implementation(project(":common-domain"))
+    implementation(project(":kafka-config"))
+    implementation(project(":kafka-producer"))
+    implementation(project(":kafka-model"))
 
     // Spring Data JPA & JDBC (RDB 어댑터 구현)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
 
-    // Kafka (이벤트 퍼블리셔 어댑터 구현)
     implementation("org.springframework.kafka:spring-kafka")
 
     // JSON 직렬화 (Kafka 메시지에 필요)
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    implementation("io.confluent:kafka-avro-serializer:7.9.2")
 
     // DB 드라이버
     runtimeOnly("org.postgresql:postgresql")

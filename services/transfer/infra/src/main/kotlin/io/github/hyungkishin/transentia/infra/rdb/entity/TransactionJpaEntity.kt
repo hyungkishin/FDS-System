@@ -63,7 +63,7 @@ class TransactionJpaEntity(
         ).apply {
             when (status) {
                 TransactionStatus.COMPLETED -> complete()
-                TransactionStatus.FAILED -> fail("송금 실패")
+                TransactionStatus.FAILED -> {}
                 TransactionStatus.PENDING -> {}
             }
         }

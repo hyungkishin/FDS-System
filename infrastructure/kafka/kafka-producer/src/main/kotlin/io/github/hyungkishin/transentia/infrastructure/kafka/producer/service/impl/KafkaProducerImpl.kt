@@ -2,17 +2,16 @@ package io.github.hyungkishin.transentia.infrastructure.kafka.producer.service.i
 
 import io.github.hyungkishin.transentia.infrastructure.kafka.producer.exception.KafkaProducerException
 import io.github.hyungkishin.transentia.infrastructure.kafka.producer.service.KafkaProducer
-import jakarta.annotation.PreDestroy
 import org.apache.avro.specific.SpecificRecordBase
 import org.slf4j.LoggerFactory
-import org.springframework.kafka.KafkaException
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
-import org.springframework.stereotype.Component
+import org.springframework.stereotype.Service
 import java.io.Serializable
+import java.util.concurrent.CompletableFuture
 import java.util.function.BiConsumer
 
-@Component
+@Service
 class KafkaProducerImpl<K : Serializable, V : SpecificRecordBase>(
     private val kafkaTemplate: KafkaTemplate<K, V>
 ) : KafkaProducer<K, V> {
@@ -21,20 +20,35 @@ class KafkaProducerImpl<K : Serializable, V : SpecificRecordBase>(
         private val log = LoggerFactory.getLogger(KafkaProducerImpl::class.java)
     }
 
+    // 비동기 메서드 (하위 호환성 유지)
     override fun send(topicName: String, key: K, message: V, callback: BiConsumer<SendResult<K, V>, Throwable>) {
         log.info("Sending message={} to topic={}", message, topicName)
+
         try {
-            val kafkaResultFuture = kafkaTemplate.send(topicName, key, message)
-            kafkaResultFuture.whenComplete(callback)
-        } catch (e: KafkaException) {
-            log.error("Error on kafka producer with key: {}, message: {} and exception: {}", key, message, e.message)
-            throw KafkaProducerException("Error on kafka producer with key: $key and message: $message")
+            kafkaTemplate.send(topicName, key, message)
+                .whenComplete { result, ex ->
+                    callback.accept(result, ex)
+                }
+        } catch (e: Exception) {
+            log.error("Error on kafka producer with key={}, message={} and exception={}", key, message, e)
+            throw KafkaProducerException("Error on kafka producer with key=$key and message=$message", e)
         }
     }
 
-    @PreDestroy
-    fun close() {
-        log.info("Closing kafka producer!")
-        kafkaTemplate.destroy()
+    // 동기 메서드
+    override fun sendSync(topicName: String, key: K, message: V): SendResult<K, V> {
+        log.info("Sending message={} to topic={} synchronously", message, topicName)
+
+        try {
+            return kafkaTemplate.send(topicName, key, message).get()
+        } catch (e: Exception) {
+            log.error("Error on synchronous kafka producer with key={}, message={} and exception={}", key, message, e)
+            throw KafkaProducerException("Error on synchronous kafka producer with key=$key and message=$message", e)
+        }
     }
+
+    override fun sendAsync(topicName: String, key: K, message: V): CompletableFuture<SendResult<K, V>> {
+        return kafkaTemplate.send(topicName, key, message)
+    }
+
 }

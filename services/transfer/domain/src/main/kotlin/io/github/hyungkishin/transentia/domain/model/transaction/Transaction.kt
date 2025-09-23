@@ -1,7 +1,6 @@
 package io.github.hyungkishin.transentia.domain.model.transaction
 
 import io.github.hyungkishin.transentia.common.message.transfer.TransferCompleted
-import io.github.hyungkishin.transentia.common.message.transfer.TransferFailed
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.domain.enums.TransactionStatus
 import io.github.hyungkishin.transentia.domain.model.account.Money
@@ -57,13 +56,6 @@ class Transaction private constructor(
         return TransferCompleted(id.value, senderId.value, receiverId.value, amount.rawValue)
     }
 
-    /** 멱등 실패 */
-    fun fail(reason: String): TransferFailed {
-        check(status == TransactionStatus.PENDING) { "PENDING 상태만 실패 처리할 수 있습니다." }
-        status = TransactionStatus.FAILED
-        failReason = reason
-        return TransferFailed(id.value, reason)
-    }
 
     override fun equals(other: Any?): Boolean = other is Transaction && other.id == id
 

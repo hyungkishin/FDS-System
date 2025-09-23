@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant TS as TransactionService
+    participant TOH as TransferOutboxEventHandler
+    participant HFEP as HybridFdsEventPublisher
+    participant Kafka as Kafka
+    participant TEO as TransferEventsOutbox
+    participant TOR as TransferOutboxRelay
+    participant FDS as FDS
+
+    Note over TS, FDS: 장애 상황: Outbox 경유 복구
+    TS->>TOH: TransferCompleted 이벤트
+    TOH->>HFEP: publish(event)
+    HFEP->>Kafka: 직접 전송 시도
+    Kafka-->>HFEP: 실패 (타임아웃/네트워크 에러)
+    HFEP->>TEO: 이벤트 저장
+
+    Note over TOR, FDS: 백그라운드 복구 (1초마다)
+    TOR->>TEO: 배치 조회
+    TOR->>Kafka: 재전송
+    Kafka->>FDS: 이벤트 전달

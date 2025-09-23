@@ -15,9 +15,3 @@ data class TransferCompleted(
     val amount: Long, // Money 객체 rawValue (scale = 8)
     override val occurredAt: Instant = Instant.now(),
 ) : TransferEventContract
-
-data class TransferFailed(
-    override val transactionId: Long,
-    val reason: String,
-    override val occurredAt: Instant = Instant.now(),
-) : TransferEventContract

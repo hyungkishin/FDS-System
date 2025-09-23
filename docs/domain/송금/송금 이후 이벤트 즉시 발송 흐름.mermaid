@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant TS as TransactionService
+    participant TOH as TransferOutboxEventHandler
+    participant HFEP as HybridFdsEventPublisher
+    participant Kafka as Kafka
+    participant FDS as FDS
+
+    Note over TS, FDS: 정상 상황: 즉시 전송 성공
+    TS->>TOH: TransferCompleted 이벤트
+    TOH->>HFEP: publish(event)
+    HFEP->>Kafka: 직접 전송 시도
+    Kafka-->>HFEP: 성공
+    Kafka->>FDS: 이벤트 즉시 전달

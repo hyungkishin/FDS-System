@@ -26,24 +26,24 @@ kafka-config:
   replication-factor: 1
 
 kafka-producer-config:
-  key-serializer-class: org.apache.kafka.common.serialization.StringSerializer
-  value-serializer-class: io.confluent.kafka.serializers.KafkaAvroSerializer
-  compression-type: lz4
+  keySerializerClass: org.apache.kafka.common.serialization.StringSerializer
+  valueSerializerClass: io.confluent.kafka.serializers.KafkaAvroSerializer
+  compressionType: lz4
   acks: "1"
-  batch-size: 32768
-  batch-size-boost-factor: 1
-  linger-ms: 10
-  request-timeout-ms: 60000
-  retry-count: 3
+  batchSize: 65536        # 64KB로 증가
+  batchSizeBoostFactor: 1
+  lingerMs: 5             # 배치 대기 시간
+  requestTimeoutMs: 1000  # 1초로 단축
+  retryCount: 0           # 재시도 없음 (빠른 실패)
 
 app:
-  relay:
-    enabled: true
   outbox:
     relay:
-      batchSize: 300
-      fixedDelayMs: 500
-      baseBackoffMs: 1000
+      batchSize: 500
+      fixedDelayMs: 1000
+      timeoutSeconds: 10
+      threadPoolSize: 4
+
   kafka:
     topics:
       transfer-events: transfer-events.v1

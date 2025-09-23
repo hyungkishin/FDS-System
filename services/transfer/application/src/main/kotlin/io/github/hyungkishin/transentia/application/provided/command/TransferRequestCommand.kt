@@ -11,5 +11,5 @@ data class TransferRequestCommand(
 ) {
     fun senderUserId(): SnowFlakeId = SnowFlakeId(senderId)
     fun receiverAccountNumber(): String = receiverAccountNumber
-    fun amount(): Money = Money.fromDecimalString(amount)
+    fun amount(): Money = Money.Companion.fromDecimalString(amount)
 }
