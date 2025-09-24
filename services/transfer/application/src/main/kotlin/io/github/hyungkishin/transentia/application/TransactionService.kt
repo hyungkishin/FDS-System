@@ -25,7 +25,7 @@ class TransactionService(
 ) : TransactionRegister {
 
     @Transactional
-    override fun create(command: TransferRequestCommand): TransferResponseCommand {
+    override fun createTransfer(command: TransferRequestCommand): TransferResponseCommand {
 
         val sender = userRepository.findById(command.senderId) ?: throw DomainException(
             CommonError.NotFound("account_balance", command.senderId.toString()),
@@ -38,6 +38,7 @@ class TransactionService(
         )
 
         // TODO: 배치 서버 생성 + 비관적 Lock 으로 User 의 일일 송금액 검증 필요
+        // - 테스트의 용이성과 확장성 / 재사용성
         TransferValidator.validate(sender, receiver, command.amount())
 
         val transaction = Transaction.of(
@@ -47,31 +48,25 @@ class TransactionService(
             command.amount()
         )
 
-        try {
-            sender.accountBalance.withdrawOrThrow(command.amount())
-            receiver.accountBalance.deposit(command.amount())
+        sender.accountBalance.withdrawOrThrow(command.amount())
+        receiver.accountBalance.deposit(command.amount())
 
-            userRepository.save(sender)
-            userRepository.save(receiver)
+        userRepository.save(sender)
+        userRepository.save(receiver)
 
-            val completeEvent = transaction.complete()
+        val completeEvent = transaction.complete()
 
-            val transaction = transactionRepository.save(transaction)
-            transactionHistoryService.recordSuccess(transaction)
+        // LOG: CDC / Date
+        val savedTransaction = transactionRepository.save(transaction)
+        transactionHistoryService.saveTransferHistory(savedTransaction) // History 는 mongoDb
 
-            eventPublisher.publishEvent(completeEvent)
+        // TODO : outboxHelper.save(transaction)
+        eventPublisher.publishEvent(completeEvent)
 
-            return TransferResponseCommand.from(transaction)
-        } catch (ex: RuntimeException) {
-            val failedEvent = transaction.fail(ex.message ?: "SYSTEM_ERROR")
-            transactionHistoryService.recordFail(transaction, ex.message)
-
-            eventPublisher.publishEvent(failedEvent)
-            throw ex
-        }
+        return TransferResponseCommand.from(savedTransaction)
     }
 
-    override fun findTransaction(transactionId: Long): TransferResponseCommand {
+    override fun findTransfer(transactionId: Long): TransferResponseCommand {
         val tx = transactionRepository.findById(transactionId)
             ?: throw DomainException(
                 CommonError.NotFound("transaction", transactionId.toString()),

@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
+// TODO: 해당 Layer 를 간단하게.
 @Component
 class TransferOutboxRelay(
     private val outbox: TransferEventsOutboxJdbcRepository,
@@ -16,7 +17,7 @@ class TransferOutboxRelay(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(fixedDelayString = "\${app.outbox.relay.fixedDelayMs:500}")
+    @Scheduled(fixedDelayString = "\${app.outbox.relay.fixedDelayMs:1000}")
     fun run() {
         val batch = outbox.claimBatch(batchSize)
         if (batch.isEmpty()) return
@@ -27,7 +28,7 @@ class TransferOutboxRelay(
         batch.forEach { row ->
             try {
                 publisher.publish(
-                    key = row.aggregateId,
+                    key = row.aggregateId, // 어떤 값을 넣으면 좋을지 ?
                     payloadJson = row.payload,
                     outboxHeadersJson = row.headers
                 )
