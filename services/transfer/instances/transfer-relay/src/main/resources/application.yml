@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: transfer-relay
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transfer
+    username: postgres
+    password: pass1234
+    driver-class-name: org.postgresql.Driver
+    hikari:  # Relay는 배치 처리 특성상 적은 커넥션으로 충분
+      maximum-pool-size: 10
+      minimum-idle: 3
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000  # 30초 (더 엄격하게)
+
+  kafka:
+    bootstrap-servers: host.docker.internal:9094
+    producer:
+      batch-size: 32768
+      linger-ms: 10
+      buffer-memory: 67108864
+      compression-type: lz4
+      acks: 1
+      retries: 3
+      max-in-flight-requests-per-connection: 5
+      client-id: transfer-relay
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+server:
+  port: 8081
+
+app:
+  relay:
+    enabled: true
+  outbox:
+    relay:
+      batchSize: 300
+      fixedDelayMs: 500
+      baseBackoffMs: 1000
+  transfer:
+    topic: transfer.events.v1

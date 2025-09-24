@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.infra.config
 
-import io.github.hyungkishin.transentia.common.message.transfer.TransferCompletedV1
-import io.github.hyungkishin.transentia.common.message.transfer.TransferFailedV1
+import io.github.hyungkishin.transentia.common.message.transfer.TransferCompleted
+import io.github.hyungkishin.transentia.common.message.transfer.TransferFailed
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
@@ -20,15 +20,15 @@ class KafkaConsumerConfig(
     }
 
     @Bean
-    fun transferCompletedDeserializer(): JsonDeserializer<TransferCompletedV1> {
-        val deserializer = JsonDeserializer(TransferCompletedV1::class.java)
+    fun transferCompletedDeserializer(): JsonDeserializer<TransferCompleted> {
+        val deserializer = JsonDeserializer(TransferCompleted::class.java)
         deserializer.addTrustedPackages("io.github.hyungkishin.transentia.common.message")
         return deserializer
     }
 
     @Bean
-    fun transferFailedDeserializer(): JsonDeserializer<TransferFailedV1> {
-        val deserializer = JsonDeserializer(TransferFailedV1::class.java)
+    fun transferFailedDeserializer(): JsonDeserializer<TransferFailed> {
+        val deserializer = JsonDeserializer(TransferFailed::class.java)
         deserializer.addTrustedPackages("io.github.hyungkishin.transentia.common.message")
         return deserializer
     }

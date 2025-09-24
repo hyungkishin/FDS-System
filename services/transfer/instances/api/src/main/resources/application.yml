@@ -6,22 +6,30 @@ spring:
     username: postgres
     password: pass1234
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: create   # 개발 단계에서는 create/update, 운영은 validate/none
-    show-sql: true
+      ddl-auto: none
+    show-sql: false
 
-  kafka:
-    bootstrap-servers: localhost:9094
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-    properties:
-      spring.json.add.type.headers: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
 
 logging:
   level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.kafka: INFO
 
 id:
@@ -29,3 +37,14 @@ id:
     node-id: ${SNOWFLAKE_NODE_ID:1}
     custom-epoch: 1704067200000
     max-clock-backward-ms: 5
+
+app:
+  relay:
+    enabled: false
+  transfer.topic: transfer.events.v1
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0

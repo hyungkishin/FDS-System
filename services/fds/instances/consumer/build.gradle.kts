@@ -6,11 +6,12 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
     implementation(project(":fds-infra"))
 
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.springframework:spring-messaging")
 
     implementation("org.springframework.boot:spring-boot-starter-json")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")

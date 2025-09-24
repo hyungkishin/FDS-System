@@ -45,8 +45,8 @@
 ## 모듈 구조
 
 ```
-:shared-common           # 공통 도메인 오류 모델 (Spring) [X]
-:delivery-http-error           # 전역 예외 핸들러, ErrorResponse (Spring Web) [V]
+:common-domain           # 공통 도메인 오류 모델 (Spring) [X]
+:common-application           # 전역 예외 핸들러, ErrorResponse (Spring Web) [V]
 
 :transfer-domain         # 도메인 엔티티/정책
 :transfer-application    # 유스케이스/트랜잭션 (Web 모름)
@@ -59,10 +59,10 @@
 
 ## 3. 의존성 규칙
 
-| From \ To            | shared-common | delivery-http-error | transfer-domain | transfer-application | transfer-infra |     api |
+| From \ To            | common-domain | common-application | transfer-domain | transfer-application | transfer-infra |     api |
 |----------------------|--------------:|--------------------:|----------------:|---------------------:|---------------:|--------:|
-| shared-common        |             — |                🙅🏻 |            🙅🏻 |                 🙅🏻 |           🙅🏻 |    🙅🏻 |
-| delivery-http-error  |       🙆🏻‍♀️ |                   — |            🙅🏻 |                 🙅🏻 |           🙅🏻 | 🙆🏻‍♀️ |
+| common-domain        |             — |                🙅🏻 |            🙅🏻 |                 🙅🏻 |           🙅🏻 |    🙅🏻 |
+| common-application  |       🙆🏻‍♀️ |                   — |            🙅🏻 |                 🙅🏻 |           🙅🏻 | 🙆🏻‍♀️ |
 | transfer-domain      |       🙆🏻‍♀️ |                🙅🏻 |               — |                 🙅🏻 |           🙅🏻 |    🙅🏻 |
 | transfer-application |       🙆🏻‍♀️ |                🙅🏻 |         🙆🏻‍♀️ |                    — |        🙆🏻‍♀️ |    🙅🏻 |
 | transfer-infra       |       🙆🏻‍♀️ |                🙅🏻 |         🙆🏻‍♀️ |              🙆🏻‍♀️ |              — |    🙅🏻 |
@@ -105,7 +105,7 @@
 
 ## 예외/오류 처리
 
-### 공통 도메인 오류 (`shared-common`)
+### 공통 도메인 오류 (`common-domain`)
 
 ```kotlin
 sealed interface DomainError {

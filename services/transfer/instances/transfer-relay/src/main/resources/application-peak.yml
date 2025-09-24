@@ -1,0 +1,11 @@
+spring:
+  kafka:
+    producer:
+      batch-size: 65536
+      linger-ms: 5              # 피크시 더 빠르게
+      buffer-memory: 134217728  # 128MB
+
+app:
+  outbox.relay:
+    batchSize: 500             # 피크시 배치 크기 증가
+    fixedDelayMs: 200          # 더 자주 처리

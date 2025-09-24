@@ -12,22 +12,31 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: none   # 개발 단계에서는 create/update, 운영은 validate/none
+      ddl-auto: none
     show-sql: true
 
   kafka:
-    bootstrap-servers: localhost:9094
+    bootstrap-servers: host.docker.internal:9094
     consumer:
       group-id: fds-consumer
-      auto-offset-reset: earliest
+      enable-auto-commit: true
+      auto-offset-reset: latest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "io.github.hyungkishin.transentia.*"
     listener:
-      ack-mode: record
-      missing-topics-fatal: false
+      ack-mode: manual
+      type: single
+
+app:
+  transfer:
+    topic: transfer.events.v1
+  retry:
+    topic: transfer.events.retry.v1
+  dlq:
+    topic: transfer.events.dlq.v1
 
 logging:
   level:

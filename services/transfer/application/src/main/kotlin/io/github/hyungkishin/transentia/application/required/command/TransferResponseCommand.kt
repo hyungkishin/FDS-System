@@ -1,13 +1,13 @@
 package io.github.hyungkishin.transentia.application.required.command
 
-import io.github.hyungkishin.transentia.consumer.model.Transaction
-import java.time.LocalDateTime
+import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
+import java.time.Instant
 
 data class TransferResponseCommand(
     val transactionId: Long,
     val status: String,
-    val createdAt: LocalDateTime,
-    val receivedAt: LocalDateTime?
+    val createdAt: Instant,
+    val receivedAt: Instant?
 ) {
     companion object {
         fun from(tx: Transaction): TransferResponseCommand {

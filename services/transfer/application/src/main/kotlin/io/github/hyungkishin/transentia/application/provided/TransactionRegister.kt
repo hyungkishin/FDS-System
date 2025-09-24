@@ -4,7 +4,7 @@ import io.github.hyungkishin.transentia.application.provided.command.TransferReq
 import io.github.hyungkishin.transentia.application.required.command.TransferResponseCommand
 
 interface TransactionRegister {
-    fun create(command: TransferRequestCommand): TransferResponseCommand
+    fun createTransfer(command: TransferRequestCommand): TransferResponseCommand
 
-    fun get(transactionId: Long): TransferResponseCommand
+    fun findTransfer(transactionId: Long): TransferResponseCommand
 }
