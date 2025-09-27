@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: fds-consumer
+  main:
+    web-application-type: none
+  kafka:
+    bootstrap-servers: ${kafka-config.bootstrap-servers}
+    consumer:
+      group-id: fds-consumer-group
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      properties:
+        schema.registry.url: ${kafka-config.schema-registry-url}
+        specific.avro.reader: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transfer
+    username: postgres
+    password: pass1234
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.kafka: INFO
+
+kafka-config:
+  bootstrap-servers: host.docker.internal:9094
+  schema-registry-url-key: schema.registry.url
+  schema-registry-url: http://localhost:8085
+  num-of-partitions: 3
+  replication-factor: 1
+
+kafka-producer-config:
+  keySerializer: org.apache.kafka.common.serialization.StringSerializer
+  valueSerializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+  compressionType: lz4
+  acks: "1"
+  batchSize: 65536
+  batchSizeBoostFactor: 1
+  lingerMs: 5
+  requestTimeoutMs: 1000
+  retryCount: 0
+
+kafka-consumer-config:
+  keyDeserializer: org.apache.kafka.common.serialization.StringDeserializer
+  valueDeserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+  consumerGroupId: fds-consumer-group
+  autoOffsetReset: earliest
+  specificAvroReaderKey: specific.avro.reader
+  specificAvroReader: true
+  batchListener: true
+  autoStartup: true
+  concurrencyLevel: 3
+  sessionTimeoutMs: 10000
+  heartbeatIntervalMs: 3000
+  maxPollIntervalMs: 300000
+  maxPollRecords: 500
+  maxPartitionFetchBytesDefault: 1048576
+  maxPartitionFetchBytesBoostFactor: 1
+  pollTimeoutMs: 150
+
+app:
+  transfer:
+    topic: transfer-events.v1
+  retry:
+    topic: transfer.events.retry.v1
+  dlq:
+    topic: transfer.events.dlq.v1

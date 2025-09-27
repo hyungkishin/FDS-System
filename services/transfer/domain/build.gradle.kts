@@ -1,5 +1,6 @@
 plugins {
-    kotlin("jvm")
+    id("transentia.kotlin-library")
+    id("transentia.code-coverage")
 }
 
 dependencies {

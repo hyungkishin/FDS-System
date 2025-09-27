@@ -5,7 +5,7 @@ import io.github.hyungkishin.transentia.application.required.HybridFdsEventPubli
 import io.github.hyungkishin.transentia.application.required.TransferEventsOutboxRepository
 import io.github.hyungkishin.transentia.common.message.transfer.TransferCompleted
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
-import io.github.hyungkishin.transentia.domain.event.TransferEvent
+import io.github.hyungkishin.transentia.container.event.TransferEvent
 import io.github.hyungkishin.transentia.infrastructure.kafka.model.TransferEventAvroModel
 import io.github.hyungkishin.transentia.infrastructure.kafka.model.TransferEventType
 import io.github.hyungkishin.transentia.infrastructure.kafka.model.TransferStatus

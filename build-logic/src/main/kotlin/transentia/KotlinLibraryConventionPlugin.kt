@@ -2,15 +2,35 @@ package transentia
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.testing.Test
+import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.dependencies
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 class KotlinLibraryConventionPlugin : Plugin<Project> {
-    override fun apply(project: Project) {
-        project.pluginManager.apply("org.jetbrains.kotlin.jvm")
+    override fun apply(target: Project) {
+        target.pluginManager.apply("org.jetbrains.kotlin.jvm")
+        target.pluginManager.apply("org.jetbrains.kotlin.plugin.spring")
+        target.pluginManager.apply("org.jetbrains.kotlin.plugin.allopen")
 
-        project.tasks.withType(KotlinJvmCompile::class.java).configureEach {
-            compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
+        target.extensions.configure<KotlinJvmProjectExtension> {
+            jvmToolchain(21)
+        }
+
+        target.tasks.withType(KotlinCompile::class.java).configureEach {
+            kotlinOptions {
+                jvmTarget = "21"
+                freeCompilerArgs = freeCompilerArgs + "-Xjsr305=strict"
+            }
+        }
+
+        target.dependencies {
+            add("implementation", "org.jetbrains.kotlin:kotlin-reflect")
+        }
+
+        target.tasks.withType(Test::class.java).configureEach {
+            useJUnitPlatform()
         }
     }
 }

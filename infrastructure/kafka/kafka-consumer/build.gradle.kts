@@ -1,4 +1,5 @@
 plugins {
+    id("transentia.spring-library")
     id("transentia.kafka-convention")
 }
 

@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.application.required
 
-import io.github.hyungkishin.transentia.domain.model.user.User
+import io.github.hyungkishin.transentia.container.model.user.User
 
 interface UserRepository {
 

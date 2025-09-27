@@ -1,6 +1,5 @@
 plugins {
-    kotlin("jvm")
-    kotlin("plugin.spring")
+    id("transentia.spring-library")
 }
 
 dependencies {

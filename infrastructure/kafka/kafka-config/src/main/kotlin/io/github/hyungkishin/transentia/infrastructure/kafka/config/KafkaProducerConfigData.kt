@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Configuration
 data class KafkaProducerConfigData(
 
     @NotBlank
-    var keySerializerClass: String = "",
+    var keySerializer: String = "",
 
     @NotBlank
-    var valueSerializerClass: String = "",
+    var valueSerializer: String = "",
 
     @NotBlank
     var compressionType: String = "",

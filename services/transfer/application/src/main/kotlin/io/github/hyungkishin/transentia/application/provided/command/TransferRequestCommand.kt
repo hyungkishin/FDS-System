@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.application.provided.command
 
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.model.account.Money
+import io.github.hyungkishin.transentia.container.model.account.Money
 
 data class TransferRequestCommand(
     val senderId: Long,

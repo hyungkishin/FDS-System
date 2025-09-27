@@ -1,5 +1,7 @@
 plugins {
+    id("transentia.kotlin-library")
     id("transentia.spring-boot-app")
+    id("transentia.kafka-convention")
 }
 
 dependencies {
@@ -12,23 +14,12 @@ dependencies {
     implementation(project(":kafka-producer"))
     implementation(project(":kafka-model"))
 
-    // 외부 의존성 (Convention Plugin에서 공통으로 처리되지 않는 것들만)
+    // Relay 특화 의존성만
     implementation("io.confluent:kafka-avro-serializer:7.9.2")
-    implementation("org.springframework.boot:spring-boot-starter-jdbc")
-    implementation("org.springframework.kafka:spring-kafka")
-
     testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation(kotlin("test"))
 }
 
-tasks.test {
-    useJUnitPlatform {
-        excludeTags("performance")
-    }
-}
-
-// 별도 성능 테스트 태스크
+// 성능 테스트는 Relay 특화 기능이므로 유지
 tasks.register<Test>("performanceTest") {
     useJUnitPlatform()
     include("**/*PerformanceTest*")

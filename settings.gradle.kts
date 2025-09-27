@@ -44,8 +44,8 @@ project(":transfer-api").projectDir = file("services/transfer/instances/api")
 include("transfer-relay")
 project(":transfer-relay").projectDir = file("services/transfer/instances/transfer-relay")
 
-include("fds-consumer")
-project(":fds-consumer").projectDir = file("services/fds/instances/consumer")
+include("fds-api")
+project(":fds-api").projectDir = file("services/fds/instances/api")
 
 include("common-application")
 project(":common-application").projectDir = file("common/common-application")

@@ -2,10 +2,10 @@ package io.github.hyungkishin.transentia.infra.config
 
 import io.github.hyungkishin.transentia.application.required.UserRepository
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.model.user.*
-import io.github.hyungkishin.transentia.domain.model.account.*
-import io.github.hyungkishin.transentia.domain.enums.UserStatus
-import io.github.hyungkishin.transentia.domain.enums.UserRole
+import io.github.hyungkishin.transentia.container.model.user.*
+import io.github.hyungkishin.transentia.container.model.account.*
+import io.github.hyungkishin.transentia.container.enums.UserStatus
+import io.github.hyungkishin.transentia.container.enums.UserRole
 import org.springframework.boot.CommandLineRunner
 import org.springframework.stereotype.Component
 import java.time.Instant

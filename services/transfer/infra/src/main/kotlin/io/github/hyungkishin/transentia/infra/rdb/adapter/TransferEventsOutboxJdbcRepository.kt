@@ -2,7 +2,7 @@ package io.github.hyungkishin.transentia.infra.rdb.adapter
 
 import io.github.hyungkishin.transentia.application.required.TransferEventsOutboxRepository
 import io.github.hyungkishin.transentia.common.outbox.transfer.ClaimedRow
-import io.github.hyungkishin.transentia.domain.event.TransferEvent
+import io.github.hyungkishin.transentia.container.event.TransferEvent
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository

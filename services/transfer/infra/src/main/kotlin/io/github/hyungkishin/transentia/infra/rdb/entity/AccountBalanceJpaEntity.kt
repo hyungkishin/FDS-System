@@ -1,12 +1,11 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.model.account.AccountBalance
-import io.github.hyungkishin.transentia.domain.model.account.Money
+import io.github.hyungkishin.transentia.container.model.account.AccountBalance
+import io.github.hyungkishin.transentia.container.model.account.Money
 import io.github.hyungkishin.transentia.infra.config.BaseEntity
 import jakarta.persistence.*
 import org.hibernate.Hibernate
-import org.springframework.data.domain.Persistable
 
 @Entity
 @Table(name = "account_balances")

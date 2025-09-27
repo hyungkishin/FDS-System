@@ -1,9 +1,9 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.enums.UserRole
-import io.github.hyungkishin.transentia.domain.enums.UserStatus
-import io.github.hyungkishin.transentia.domain.model.user.*
+import io.github.hyungkishin.transentia.container.enums.UserRole
+import io.github.hyungkishin.transentia.container.enums.UserStatus
+import io.github.hyungkishin.transentia.container.model.user.*
 import jakarta.persistence.*
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes

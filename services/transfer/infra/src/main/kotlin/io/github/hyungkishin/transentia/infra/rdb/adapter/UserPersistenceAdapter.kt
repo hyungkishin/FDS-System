@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.infra.rdb.adapter
 
 import io.github.hyungkishin.transentia.application.required.UserRepository
-import io.github.hyungkishin.transentia.domain.model.user.User
+import io.github.hyungkishin.transentia.container.model.user.User
 import io.github.hyungkishin.transentia.infra.rdb.entity.UserJpaEntity
 import io.github.hyungkishin.transentia.infra.rdb.repository.UserJpaRepository
 import org.springframework.stereotype.Component

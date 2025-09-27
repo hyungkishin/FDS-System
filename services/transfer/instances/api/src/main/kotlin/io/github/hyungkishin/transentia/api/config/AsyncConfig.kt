@@ -19,17 +19,20 @@ class AsyncConfig {
         executor.corePoolSize = 3
         executor.maxPoolSize = 10
         executor.queueCapacity = 50
-        executor.threadNamePrefix = "outbox-event-"
+        executor.setThreadNamePrefix("outbox-event-")
         executor.setRejectedExecutionHandler(ThreadPoolExecutor.CallerRunsPolicy())
         executor.setWaitForTasksToCompleteOnShutdown(true)
         executor.setAwaitTerminationSeconds(30)
+
+        // TaskDecorator 적용
+        executor.setTaskDecorator(mdcTaskDecorator())
+
         executor.initialize()
         return executor
     }
 
     // MDC 정보 전파를 위한 TaskDecorator
-    @Bean
-    fun mdcTaskDecorator(): TaskDecorator {
+    private fun mdcTaskDecorator(): TaskDecorator {
         return TaskDecorator { runnable ->
             val contextMap = MDC.getCopyOfContextMap()
             Runnable {
@@ -44,4 +47,5 @@ class AsyncConfig {
             }
         }
     }
+
 }

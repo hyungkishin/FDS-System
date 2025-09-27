@@ -22,8 +22,8 @@ class KafkaProducerConfig<K : Serializable, V : SpecificRecordBase>(
         return mutableMapOf<String, Any>().apply {
             put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConfigData.bootstrapServers)
             put(kafkaConfigData.schemaRegistryUrlKey, kafkaConfigData.schemaRegistryUrl)
-            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, kafkaProducerConfigData.keySerializerClass)
-            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, kafkaProducerConfigData.valueSerializerClass)
+            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, kafkaProducerConfigData.keySerializer)
+            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, kafkaProducerConfigData.valueSerializer)
             put(ProducerConfig.BATCH_SIZE_CONFIG,
                 kafkaProducerConfigData.batchSize * kafkaProducerConfigData.batchSizeBoostFactor)
             put(ProducerConfig.LINGER_MS_CONFIG, kafkaProducerConfigData.lingerMs)

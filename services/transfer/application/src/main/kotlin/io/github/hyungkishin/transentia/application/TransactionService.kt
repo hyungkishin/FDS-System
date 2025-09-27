@@ -9,8 +9,8 @@ import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
-import io.github.hyungkishin.transentia.domain.validator.transfer.TransferValidator
+import io.github.hyungkishin.transentia.container.model.transaction.Transaction
+import io.github.hyungkishin.transentia.container.validator.transfer.TransferValidator
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

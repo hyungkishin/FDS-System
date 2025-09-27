@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 
-import io.github.hyungkishin.transentia.domain.model.transaction.TransactionHistory
+import io.github.hyungkishin.transentia.container.model.transaction.TransactionHistory
 import jakarta.persistence.*
 import org.hibernate.Hibernate
 import java.time.Instant

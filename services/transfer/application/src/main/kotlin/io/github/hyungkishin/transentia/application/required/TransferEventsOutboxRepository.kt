@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.application.required
 
 import io.github.hyungkishin.transentia.common.outbox.transfer.ClaimedRow
-import io.github.hyungkishin.transentia.domain.event.TransferEvent
+import io.github.hyungkishin.transentia.container.event.TransferEvent
 
 interface TransferEventsOutboxRepository {
 

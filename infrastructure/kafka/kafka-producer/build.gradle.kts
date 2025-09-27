@@ -1,4 +1,5 @@
 plugins {
+    id("transentia.kotlin-library")
     id("transentia.kafka-convention")
 }
 

@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.application.provided
 
-import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
+import io.github.hyungkishin.transentia.container.model.transaction.Transaction
 
 interface TransactionHistoryRegister {
 
