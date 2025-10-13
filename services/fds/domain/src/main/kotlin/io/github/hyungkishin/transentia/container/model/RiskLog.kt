@@ -12,6 +12,7 @@ class RiskLog private constructor(
     val txId: Long,
     val decision: FinalDecisionType,
     val reasons: List<String>,
+
     // TODO: ai Score 구체화 필요
     val aiScore: Double?,
     val evaluatedAt: Instant,
@@ -23,7 +24,7 @@ class RiskLog private constructor(
     }
 
     companion object {
-        fun create(
+        fun of(
             txId: Long,
             decision: FinalDecisionType,
             reasons: List<String>,
@@ -35,7 +36,7 @@ class RiskLog private constructor(
                 id = null,
                 txId = txId,
                 decision = decision,
-                reasons = reasons.distinct().take(10), // 과도한 사유 제한
+                reasons = reasons.distinct().take(10), // 과도한 사유가 걸릴경우 간단한 사유로 제한 (최대 10개)
                 aiScore = aiScore,
                 evaluatedAt = evaluatedAt,
                 ruleHits = ruleHits.toList()

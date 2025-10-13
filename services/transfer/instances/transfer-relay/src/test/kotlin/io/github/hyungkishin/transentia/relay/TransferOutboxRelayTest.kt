@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
+import java.time.Instant
 import java.util.concurrent.ExecutorService
 
 @ExtendWith(MockitoExtension::class)
@@ -38,6 +39,8 @@ class TransferOutboxRelayTest {
     fun setUp() {
         // 기본 설정값만 설정 - 필요한 테스트에서 개별적으로 추가 설정
         whenever(config.batchSize).thenReturn(100)
+        whenever(config.instanceId).thenReturn(0)
+        whenever(config.totalInstances).thenReturn(1)
 
         relay = TransferOutboxRelay(
             outboxRepository = outboxRepository,
@@ -45,20 +48,25 @@ class TransferOutboxRelayTest {
             retryPolicyHandler = retryPolicyHandler,
             config = config,
             executorService = executorService,
-            topicName = "transfer-events"
+            topicName = "transfer-transaction-events"
         )
     }
 
     @Test
     fun `빈 배치일 때 처리하지 않음`() {
         // Given
-        whenever(outboxRepository.claimBatch(100)).thenReturn(emptyList())
+        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(emptyList())
 
         // When
         relay.run()
 
         // Then
-        verify(outboxRepository).claimBatch(eq(100))
+        verify(outboxRepository).claimBatchByPartition(
+            partition = eq(0),
+            totalPartitions = eq(1),
+            limit = eq(100),
+            now = any()
+        )
         verifyNoInteractions(eventBatchProcessor)
         verifyNoInteractions(retryPolicyHandler)
     }
@@ -72,7 +80,7 @@ class TransferOutboxRelayTest {
             failedEvents = emptyList()
         )
 
-        whenever(outboxRepository.claimBatch(100)).thenReturn(batch)
+        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenReturn(successResult)
 
@@ -80,9 +88,14 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // Then
-        verify(outboxRepository).claimBatch(eq(100))
+        verify(outboxRepository).claimBatchByPartition(
+            partition = eq(0),
+            totalPartitions = eq(1),
+            limit = eq(100),
+            now = any()
+        )
         verify(eventBatchProcessor).processBatch(any(), any(), any(), any())
-        verify(outboxRepository).markAsPublished(eq(listOf(1L, 2L)))
+        verify(outboxRepository).markAsPublished(eq(listOf(1L, 2L)), any())
         verifyNoInteractions(retryPolicyHandler)
     }
 
@@ -102,7 +115,7 @@ class TransferOutboxRelayTest {
             )
         )
 
-        whenever(outboxRepository.claimBatch(100)).thenReturn(batch)
+        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenReturn(failedResult)
         whenever(retryPolicyHandler.calculateBackoff(1)).thenReturn(5000L)
@@ -111,11 +124,16 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // Then
-        verify(outboxRepository).claimBatch(eq(100))
+        verify(outboxRepository).claimBatchByPartition(
+            partition = eq(0),
+            totalPartitions = eq(1),
+            limit = eq(100),
+            now = any()
+        )
         verify(eventBatchProcessor).processBatch(any(), any(), any(), any())
         verify(retryPolicyHandler).calculateBackoff(eq(1))
-        verify(outboxRepository).markFailedWithBackoff(eq(1L), eq("Kafka connection failed"), eq(5000L))
-        verify(outboxRepository, never()).markAsPublished(any())
+        verify(outboxRepository).markFailedWithBackoff(eq(1L), eq("Kafka connection failed"), eq(5000L), any())
+        verify(outboxRepository, never()).markAsPublished(any(), any())
     }
 
     @Test
@@ -133,7 +151,7 @@ class TransferOutboxRelayTest {
             )
         )
 
-        whenever(outboxRepository.claimBatch(100)).thenReturn(batch)
+        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenReturn(mixedResult)
         whenever(retryPolicyHandler.calculateBackoff(2)).thenReturn(10000L)
@@ -142,16 +160,16 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // Then
-        verify(outboxRepository).markAsPublished(eq(listOf(1L)))
+        verify(outboxRepository).markAsPublished(eq(listOf(1L)), any())
         verify(retryPolicyHandler).calculateBackoff(eq(2))
-        verify(outboxRepository).markFailedWithBackoff(eq(2L), eq("Serialization failed"), eq(10000L))
+        verify(outboxRepository).markFailedWithBackoff(eq(2L), eq("Serialization failed"), eq(10000L), any())
     }
 
     @Test
     fun `처리 중 예외 발생시 안전하게 처리`() {
         // Given
         val batch = listOf(createMockClaimedRow(1L))
-        whenever(outboxRepository.claimBatch(100)).thenReturn(batch)
+        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenThrow(RuntimeException("Unexpected error"))
 
@@ -160,7 +178,12 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // 배치 조회는 성공했어야 함
-        verify(outboxRepository).claimBatch(eq(100))
+        verify(outboxRepository).claimBatchByPartition(
+            partition = eq(0),
+            totalPartitions = eq(1),
+            limit = eq(100),
+            now = any()
+        )
         verify(eventBatchProcessor).processBatch(any(), any(), any(), any())
     }
 

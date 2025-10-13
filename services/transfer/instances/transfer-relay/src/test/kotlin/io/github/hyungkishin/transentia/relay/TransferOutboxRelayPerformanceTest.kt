@@ -68,7 +68,7 @@ class TransferOutboxRelayPerformanceTest {
                 Int.MAX_VALUE
             }
 
-            val within1Second = if (processingTime < 1000) "✅" else "❌"
+            val within1Second = if (processingTime < 1000) "O" else "X"
             val successRate = if (batchSize > 0) "%.1f%%".format(publishedCount * 100.0 / batchSize) else "0%"
 
             println("배치: $batchSize 개, 시간: ${processingTime}ms, 처리량: $eventsPerSec/sec, 성공률: $successRate $within1Second")

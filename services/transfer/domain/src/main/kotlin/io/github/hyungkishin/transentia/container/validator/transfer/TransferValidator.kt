@@ -2,7 +2,7 @@ package io.github.hyungkishin.transentia.container.validator.transfer
 
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
-import io.github.hyungkishin.transentia.container.model.account.Money
+import io.github.hyungkishin.transentia.common.model.Amount
 import io.github.hyungkishin.transentia.container.model.user.User
 
 object TransferValidator {
@@ -11,7 +11,7 @@ object TransferValidator {
      * 송금 가능성 전체 검증
      * 실패 시 즉시 예외 발생 (fail-fast)
      */
-    fun validate(sender: User, receiver: User, amount: Money) {
+    fun validate(sender: User, receiver: User, amount: Amount) {
         validateAmount(amount)
         validateSender(sender, amount)
         validateReceiver(receiver)
@@ -20,7 +20,7 @@ object TransferValidator {
     /**
      * 송신자 검증
      */
-    fun validateSender(sender: User, amount: Money) {
+    fun validateSender(sender: User, amount: Amount) {
         // 1. 블랙리스트 체크
         if (sender.isBlacklisted()) {
             throw DomainException(
@@ -29,19 +29,19 @@ object TransferValidator {
             )
         }
 
-        // 2. 일일 한도 체크
-        if (sender.validateTransferAmount(amount.rawValue)) {
-            throw DomainException(
-                CommonError.InvalidArgument("daily_limit_exceeded"),
-                "일일 송금 한도(${sender.dailyTransferLimit.value}원)를 초과했습니다"
-            )
-        }
+        // 2. 일일 한도 체크 TODO : redis cache 를 사용해야 할까 ?
+//        if (!sender.validateTransferAmount(amount)) {
+//            throw DomainException(
+//                CommonError.InvalidArgument("daily_limit_exceeded"),
+//                "일일 송금 한도(${sender.dailyTransferLimit})를 초과했습니다"
+//            )
+//        }
 
         // 3. 잔액 체크
         if (!sender.accountBalance.hasEnoughBalance(amount)) {
             throw DomainException(
                 CommonError.InvalidArgument("insufficient_balance"),
-                "잔액이 부족합니다. 현재 잔액: ${sender.accountBalance.balance}원"
+                "잔액이 부족합니다. 현재 잔액=${sender.accountBalance.balance}, 요청 금액=$amount"
             )
         }
     }
@@ -68,13 +68,12 @@ object TransferValidator {
     /**
      * 기본 금액 검증
      */
-    fun validateAmount(amount: Money) {
-        if (amount.isZero()) {
+    fun validateAmount(amount: Amount) {
+        if (!amount.money.isPositive()) {
             throw DomainException(
                 CommonError.InvalidArgument("invalid_amount"),
-                "송금 금액은 0원보다 커야 합니다"
+                "송금 금액은 0보다 커야 합니다: $amount"
             )
         }
     }
-
 }

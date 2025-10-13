@@ -81,7 +81,7 @@ class UserJpaEntity(
                 email = domain.email.value,
                 status = domain.status,
                 role = domain.role,
-                account = accountEntity,  // account 설정
+                account = accountEntity,
                 isTransferLocked = domain.isTransferLocked,
                 transferLockReason = domain.transferLockReason?.value,
                 dailyTransferLimit = domain.dailyTransferLimit.value,
@@ -89,7 +89,6 @@ class UserJpaEntity(
                 updatedAt = domain.updatedAt
             )
 
-            // 양방향 연관관계 설정
             accountEntity.user = userEntity
 
             return userEntity

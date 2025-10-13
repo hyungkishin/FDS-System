@@ -81,7 +81,7 @@ class EventBatchProcessor(
     private fun processEvent(row: ClaimedRow, topicName: String): EventProcessingResult {
         return try {
             val eventModel = createKafkaEventModel(row)
-            kafkaEventPublisher.publish(topicName, row.aggregateId, eventModel)
+            kafkaEventPublisher.publish(topicName,  eventModel)
             return EventProcessingResult.success(row.eventId)
         } catch (e: Exception) {
             val shouldRetry = retryPolicyHandler.shouldRetry(e)

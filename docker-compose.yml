@@ -74,17 +74,18 @@ services:
       - kafka_data:/bitnami/kafka                        # 로그/메타데이터 영속화(클러스터 ID/토픽 유지)
 
   init-topics:
-    image: bitnami/kafka:3.7                             # kafka CLI 사용을 위해 동일 이미지
-    container_name: transfer-kafka-init                  # 1회성 초기화 Job 식별
+    image: bitnami/kafka:3.7
+    container_name: transfer-kafka-init
     depends_on:
       kafka:
-        condition: service_healthy                       # 브로커가 살아있을 때만 토픽 생성 시도
+        condition: service_healthy
     command: >
       bash -c "
-      /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic transfer-events.v1 --partitions 8 --replication-factor 1 &&
+      /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic transfer-complete-events --partitions 8 --replication-factor 1 &&
+      /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic transfer-transaction-events --partitions 3 --replication-factor 1 &&
       echo 'topics created'
       "
-    restart: "no"                                        # 초기화 1회만 실행
+    restart: "no"
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest                 # TODO: 개발 중 토픽/메시지 관찰 (운영 시 고려 필요.)
@@ -112,6 +113,106 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+
+  # =============================================================================
+  # Relay 서버 3대 (파티셔닝)
+  # =============================================================================
+  # 
+  # 파티셔닝 전략:
+  #   - 각 인스턴스가 MOD(event_id, 3) = {0, 1, 2} 조건으로 서로 다른 이벤트 처리
+  #   - 락 경합 감소, 부하 분산
+  # 
+  # 확장 시나리오:
+  #   평시 (200 TPS): 3대 운영 (각 67 TPS, 부하 14%)
+  #   피크 (2000 TPS): 7대로 확장 (각 286 TPS, 부하 61%)
+  # =============================================================================
+
+#  transfer-relay-0:
+#    build:
+#      context: .
+#      dockerfile: services/transfer/instances/transfer-relay/Dockerfile
+#    container_name: transfer-relay-0
+#    restart: unless-stopped
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      kafka:
+#        condition: service_healthy
+#    environment:
+#      # Spring 설정
+#      SPRING_PROFILES_ACTIVE: dev
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/transfer
+#      SPRING_DATASOURCE_USERNAME: postgres
+#      SPRING_DATASOURCE_PASSWORD: pass1234
+#
+#      # Kafka 설정
+#      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+#
+#      # 파티셔닝 설정 - Instance 0
+#      # MOD(event_id, 3) = 0 처리
+#      # 예: event_id가 0, 3, 6, 9, 12, 15...
+#      RELAY_INSTANCE_ID: 0
+#      RELAY_TOTAL_INSTANCES: 3
+#    networks:
+#      - default
+#
+#  transfer-relay-1:
+#    build:
+#      context: .
+#      dockerfile: services/transfer/instances/transfer-relay/Dockerfile
+#    container_name: transfer-relay-1
+#    restart: unless-stopped
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      kafka:
+#        condition: service_healthy
+#    environment:
+#      # Spring 설정
+#      SPRING_PROFILES_ACTIVE: dev
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/transfer
+#      SPRING_DATASOURCE_USERNAME: postgres
+#      SPRING_DATASOURCE_PASSWORD: pass1234
+#
+#      # Kafka 설정
+#      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+#
+#      # 파티셔닝 설정 - Instance 1
+#      # MOD(event_id, 3) = 1 처리
+#      # 예: event_id가 1, 4, 7, 10, 13, 16...
+#      RELAY_INSTANCE_ID: 1
+#      RELAY_TOTAL_INSTANCES: 3
+#    networks:
+#      - default
+#
+#  transfer-relay-2:
+#    build:
+#      context: .
+#      dockerfile: services/transfer/instances/transfer-relay/Dockerfile
+#    container_name: transfer-relay-2
+#    restart: unless-stopped
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      kafka:
+#        condition: service_healthy
+#    environment:
+#      # Spring 설정
+#      SPRING_PROFILES_ACTIVE: dev
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/transfer
+#      SPRING_DATASOURCE_USERNAME: postgres
+#      SPRING_DATASOURCE_PASSWORD: pass1234
+#
+#      # Kafka 설정
+#      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+#
+#      # 파티셔닝 설정 - Instance 2
+#      # MOD(event_id, 3) = 2 처리
+#      # 예: event_id가 2, 5, 8, 11, 14, 17...
+#      RELAY_INSTANCE_ID: 2
+#      RELAY_TOTAL_INSTANCES: 3
+#    networks:
+#      - default
 
 volumes:
   pg_data:                                               # Postgres 데이터 영속 볼륨

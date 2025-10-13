@@ -26,7 +26,6 @@ class TransactionService(
 
     @Transactional
     override fun createTransfer(command: TransferRequestCommand): TransferResponseCommand {
-
         val sender = userRepository.findById(command.senderId) ?: throw DomainException(
             CommonError.NotFound("account_balance", command.senderId.toString()),
             "송신자 정보를 찾을 수 없습니다. senderId=${command.senderId}"
@@ -37,8 +36,7 @@ class TransactionService(
             "수신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.receiverAccountNumber}"
         )
 
-        // TODO: 배치 서버 생성 + 비관적 Lock 으로 User 의 일일 송금액 검증 필요 ...?
-        // - 테스트의 용이성과 확장성 / 재사용성
+        // TODO: - 테스트의 용이성과 확장성 / 재사용성 검증하기
         TransferValidator.validate(sender, receiver, command.amount())
 
         val transaction = Transaction.of(
@@ -55,11 +53,9 @@ class TransactionService(
         userRepository.save(receiver)
 
         val completeEvent = transaction.complete()
-
-        // LOG: CDC / Date
         val savedTransaction = transactionRepository.save(transaction)
-//        transactionHistoryService.saveTransferHistory(savedTransaction) // History 는 mongoDb
-        // TODO : outboxHelper.save(transaction)
+
+        // TODO: outbox ( kafka publish ) + relay 서버를 fadeout 하고, CDC 방식으로 전환.
         eventPublisher.publishEvent(completeEvent)
 
         return TransferResponseCommand.from(savedTransaction)

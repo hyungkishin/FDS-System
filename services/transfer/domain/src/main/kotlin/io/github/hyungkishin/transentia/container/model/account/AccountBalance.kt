@@ -2,28 +2,37 @@ package io.github.hyungkishin.transentia.container.model.account
 
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
+import io.github.hyungkishin.transentia.common.model.Amount
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 
 class AccountBalance private constructor(
     val id: SnowFlakeId,
     val userId: SnowFlakeId,
     val accountNumber: String,
-    var balance: Money,
+    var balance: Amount,
     val version: Long,
 ) {
 
     companion object {
-        fun of(id: SnowFlakeId, userId: SnowFlakeId, accountNumber: String, balance: Money, version: Long): AccountBalance {
+        fun of(
+            id: SnowFlakeId,
+            userId: SnowFlakeId,
+            accountNumber: String,
+            balance: Amount,
+            version: Long
+        ): AccountBalance {
             return AccountBalance(id, userId, accountNumber, balance, version)
         }
     }
 
-    fun deposit(amount: Money) {
+    fun deposit(amount: Amount) {
+        requireSameCurrency(amount)
         balance = balance.add(amount)
     }
 
     /** 출금, 실패 시 도메인 예외 */
-    fun withdrawOrThrow(amount: Money) {
+    fun withdrawOrThrow(amount: Amount) {
+        requireSameCurrency(amount)
         if (balance < amount) {
             throw DomainException(
                 CommonError.InvalidArgument(field = "amount", reason = "insufficient_balance"),
@@ -33,10 +42,19 @@ class AccountBalance private constructor(
         balance = balance.subtract(amount)
     }
 
-    fun current(): Money = balance
+    fun current(): Amount = balance
 
-    fun hasEnoughBalance(amount: Money): Boolean {
+    fun hasEnoughBalance(amount: Amount): Boolean {
+        requireSameCurrency(amount)
         return balance >= amount
     }
 
+    private fun requireSameCurrency(other: Amount) {
+        if (balance.currency != other.currency) {
+            throw DomainException(
+                CommonError.InvalidArgument("currency_mismatch"),
+                "계좌 통화(${balance.currency})와 요청 금액 통화(${other.currency})가 다릅니다"
+            )
+        }
+    }
 }

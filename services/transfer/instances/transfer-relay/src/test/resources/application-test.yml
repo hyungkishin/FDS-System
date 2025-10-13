@@ -1,7 +1,6 @@
 spring:
   application:
     name: transfer-relay
-
   datasource:
     url: jdbc:postgresql://localhost:5432/transfer
     username: postgres
@@ -43,10 +42,17 @@ app:
       fixedDelayMs: 1000
       timeoutSeconds: 10
       threadPoolSize: 4
+      baseBackoffMs: 5000
+      maxBackoffMs: 600000
+      slowProcessingThresholdMs: 3000
+      
+      # 파티셔닝 설정 (테스트에서는 코드에서 주입)
+      instanceId: 0
+      totalInstances: 1
 
   kafka:
     topics:
-      transfer-events: transfer-events.v1
+      transfer-events: transfer-transaction-events
 
 management:
   tracing:

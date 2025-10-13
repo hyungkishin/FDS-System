@@ -1,8 +1,10 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
+import io.github.hyungkishin.transentia.common.model.Amount
+import io.github.hyungkishin.transentia.common.model.Currency
+import io.github.hyungkishin.transentia.common.model.Money
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.container.enums.TransactionStatus
-import io.github.hyungkishin.transentia.container.model.account.Money
 import io.github.hyungkishin.transentia.container.model.transaction.Transaction
 import io.github.hyungkishin.transentia.infra.config.BaseEntity
 import jakarta.persistence.*
@@ -35,6 +37,11 @@ class TransactionJpaEntity(
     @Column(name = "amount", nullable = false)
     val amount: Long,
 
+    @Column(name = "currency", nullable = false)
+    // TODO : Enum 고려
+    @Enumerated(EnumType.STRING)
+    val currency: Currency,
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "status", nullable = false)
@@ -59,7 +66,7 @@ class TransactionJpaEntity(
             id = SnowFlakeId(id),
             senderSnowFlakeId = SnowFlakeId(senderUserId),
             receiverSnowFlakeId = SnowFlakeId(receiverUserId),
-            amount = Money.fromRawValue(amount)
+            amount = Amount(Money.fromRawValue(amount), currency),
         ).apply {
             when (status) {
                 TransactionStatus.COMPLETED -> complete()
@@ -74,9 +81,10 @@ class TransactionJpaEntity(
                 id = domain.id.value,
                 senderUserId = domain.senderId.value,
                 receiverUserId = domain.receiverId.value,
-                amount = domain.amount.rawValue,
                 status = domain.status,
-                receivedAt = domain.createdAt // 의미가 다르면 적절히 매핑
+                amount = domain.amount.money.rawValue,
+                currency = domain.amount.currency,
+                receivedAt = domain.createdAt // TODO : 확인
             )
     }
 

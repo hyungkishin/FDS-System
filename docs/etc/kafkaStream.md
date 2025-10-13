@@ -1,6 +1,7 @@
 # Kafka Streams
 
 ## KStream
+- [Apache Kafka Streams 공식문서](https://kafka.apache.org/41/documentation/streams/quickstart)
 
 ### 개념
 - **"무엇이 일어났는가"** 에 집중하는 이벤트 스트림이다.
@@ -47,6 +48,15 @@ clickStream
         { ClickAggregate() },
         { key, value, aggregate -> aggregate.add(value) }
     )
+```
+
+#### 3. 사용방법
+
+- https://mvnrepository.com/artifact/org.apache.kafka/kafka-streams
+```kotlin
+// build.gradle.kts
+implementation("org.apache.kafka:kafka-streams")
+
 ```
 
 ---
@@ -98,7 +108,7 @@ val inventoryTable: KTable<String, Int> = builder.table("inventory")
 
 KStream과 KTable은 상호 변환이 가능한 쌍대성을 가진다.
 
-### KStream → KTable 변환
+### KStream -> KTable 변환
 
 스트림에 **집계 연산**을 적용하면 KTable로 변환된다.
 
@@ -114,7 +124,7 @@ val orderCountTable: KTable<String, Long> = orderStream
 
 **설명**: 고객 ID를 기준으로 스트림을 그룹화하고 횟수를 세면, 각 고객의 현재까지 총 주문 건수를 저장하는 KTable이 생성된다.
 
-### KTable → KStream 변환
+### KTable -> KStream 변환
 
 KTable의 변경 사항을 이벤트 스트림으로 변환할 수 있다.
 
@@ -142,8 +152,8 @@ val locationChangeStream: KStream<String, String> = userLocationTable.toStream()
 - 참조 데이터 (Reference Data)
 
 ### 변환 기준
-- **집계가 필요한가?** → KStream에서 KTable로
-- **상태 변경을 추적하고 싶은가?** → KTable에서 KStream으로
+- **집계가 필요한가?** -> KStream에서 KTable로
+- **상태 변경을 추적하고 싶은가?** -> KTable에서 KStream으로
 
 ---
 

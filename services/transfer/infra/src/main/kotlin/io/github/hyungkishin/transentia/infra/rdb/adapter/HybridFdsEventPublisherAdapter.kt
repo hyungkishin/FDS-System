@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.time.Instant
 import java.util.*
 
 @Component
@@ -54,11 +55,14 @@ class HybridFdsEventPublisherAdapter(
                 .setCreatedAt(System.currentTimeMillis())
                 .build()
 
-            kafkaProducer.sendSync(topicName, event.transactionId.toString(), transferModel)
+            kafkaProducer.sendSync(topicName, transferModel)
             true
         } catch (e: Exception) {
+            println(e.message)
             // 실패시, outbox 테이블에 적재. ( 실패한 이벤트는 relay 서버에서 실행한다. )
             saveToOutTransferOutbox(event)
+
+            // TODO 알림 ?
             false
         }
 
@@ -81,11 +85,12 @@ class HybridFdsEventPublisherAdapter(
                 eventVersion = "TransferCompleted"
             )
 
-            outboxRepository.save(outboxEvent)
+            outboxRepository.save(outboxEvent, Instant.now())
 
             log.info("Transfer completed event saved to outbox: transactionId={}", event.transactionId)
         } catch (e: Exception) {
             log.error("Failed to save transfer completed event to outbox: transactionId={}", event.transactionId, e)
+            // TODO: webhook + 모니터링 -> 알려주는거까지.
         }
     }
 

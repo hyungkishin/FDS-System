@@ -40,30 +40,40 @@ class TransferOutboxRelayIntegrationTest {
     @Test
     fun `빈 Outbox에서 relay 실행시 아무것도 처리하지 않음`() {
         // Given - Repository가 빈 목록 반환
-        whenever(repository.claimBatch(any())).thenReturn(emptyList())
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(emptyList())
 
         // When - Relay 실행
         relay.run()
 
-        // Then - claimBatch만 호출되고 다른 메서드는 호출되지 않음
-        verify(repository).claimBatch(config.batchSize)
-        verify(repository, never()).markAsPublished(any())
-        verify(repository, never()).markFailedWithBackoff(any(), any(), any())
+        // Then - claimBatchByPartition만 호출되고 다른 메서드는 호출되지 않음
+        verify(repository).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository, never()).markAsPublished(any(), any())
+        verify(repository, never()).markFailedWithBackoff(any(), any(), any(), any())
     }
 
     @Test
     fun `단일 PENDING 이벤트를 성공적으로 처리`() {
         // Given - Repository가 1개 이벤트 반환
         val claimedEvent = createClaimedRow(1L)
-        whenever(repository.claimBatch(any())).thenReturn(listOf(claimedEvent))
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(listOf(claimedEvent))
 
         // When - Relay 실행
         relay.run()
 
-        // Then - claimBatch 호출 후 markAsPublished 호출됨
-        verify(repository).claimBatch(config.batchSize)
-        verify(repository).markAsPublished(listOf(1L))
-        verify(repository, never()).markFailedWithBackoff(any(), any(), any())
+        // Then - claimBatchByPartition 호출 후 markAsPublished 호출됨
+        verify(repository).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository).markAsPublished(eq(listOf(1L)), any())
+        verify(repository, never()).markFailedWithBackoff(any(), any(), any(), any())
     }
 
     @Test
@@ -71,42 +81,57 @@ class TransferOutboxRelayIntegrationTest {
         // Given - Repository가 여러 이벤트 반환
         val batchSize = 5
         val claimedEvents = (1L..batchSize).map { createClaimedRow(it) }
-        whenever(repository.claimBatch(any())).thenReturn(claimedEvents)
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(claimedEvents)
 
         // When - Relay 실행
         relay.run()
 
         // Then - 모든 이벤트가 성공적으로 처리됨
-        verify(repository).claimBatch(config.batchSize)
-        verify(repository).markAsPublished((1L..batchSize).toList())
-        verify(repository, never()).markFailedWithBackoff(any(), any(), any())
+        verify(repository).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository).markAsPublished(eq((1L..batchSize).toList()), any())
+        verify(repository, never()).markFailedWithBackoff(any(), any(), any(), any())
     }
 
     @Test
-    fun `첫 번째 claimBatch에서 빈 결과 반환시 처리 종료`() {
+    fun `첫 번째 claimBatchByPartition에서 빈 결과 반환시 처리 종료`() {
         // Given - Repository가 빈 목록 반환 (더 이상 처리할 이벤트 없음)
-        whenever(repository.claimBatch(any())).thenReturn(emptyList())
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(emptyList())
 
         // When - Relay 실행
         relay.run()
 
-        // Then - claimBatch 한 번만 호출되고 종료
-        verify(repository, times(1)).claimBatch(config.batchSize)
-        verify(repository, never()).markAsPublished(any())
+        // Then - claimBatchByPartition 한 번만 호출되고 종료
+        verify(repository, times(1)).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository, never()).markAsPublished(any(), any())
     }
 
     @Test
     fun `대용량 배치를 단일 실행에서 처리`() {
         // Given - Repository가 배치 사이즈만큼 이벤트 반환
         val batchEvents = (1L..config.batchSize.toLong()).map { createClaimedRow(it) }
-        whenever(repository.claimBatch(any())).thenReturn(batchEvents)
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batchEvents)
 
         // When - Relay 한 번 실행
         relay.run()
 
-        // Then - claimBatch가 호출되고 모든 이벤트 처리 (스케줄러에 의한 추가 호출 가능)
-        verify(repository, atLeast(1)).claimBatch(config.batchSize)
-        verify(repository).markAsPublished((1L..config.batchSize.toLong()).toList())
+        // Then - claimBatchByPartition이 호출되고 모든 이벤트 처리
+        verify(repository, atLeast(1)).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository).markAsPublished(eq((1L..config.batchSize.toLong()).toList()), any())
     }
 
     @Test
@@ -114,22 +139,27 @@ class TransferOutboxRelayIntegrationTest {
         // Given - Repository Mock 설정
         val eventIds = listOf(100L, 101L, 102L)
         val claimedEvents = eventIds.map { createClaimedRow(it) }
-        whenever(repository.claimBatch(any())).thenReturn(claimedEvents)
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(claimedEvents)
 
         // When - Relay 실행 (한 번만)
         relay.run()
 
-        // Then - Repository 메서드 호출 확인 (스케줄러에 의한 추가 호출 허용)
-        verify(repository, atLeast(1)).claimBatch(config.batchSize)
-        verify(repository).markAsPublished(eventIds)
+        // Then - Repository 메서드 호출 확인
+        verify(repository, atLeast(1)).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository).markAsPublished(eq(eventIds), any())
     }
 
     @Test
     fun `Kafka 발송 실패 시뮬레이션 - markAsPublished가 예외 발생`() {
         // Given - Repository가 이벤트 반환하지만 markAsPublished에서 예외 발생
         val claimedEvent = createClaimedRow(1L)
-        whenever(repository.claimBatch(any())).thenReturn(listOf(claimedEvent))
-        whenever(repository.markAsPublished(any())).thenThrow(RuntimeException("Kafka connection failed"))
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(listOf(claimedEvent))
+        whenever(repository.markAsPublished(any(), any())).thenThrow(RuntimeException("Kafka connection failed"))
 
         // When & Then - Relay 실행 시 예외가 전파됨
         try {
@@ -139,37 +169,51 @@ class TransferOutboxRelayIntegrationTest {
         }
 
         // Then - 실패한 이벤트에 대해 markFailedWithBackoff 호출 확인
-        verify(repository).claimBatch(config.batchSize)
-        verify(repository).markAsPublished(listOf(1L))
-        // 실제 구현에서 예외 처리 방식에 따라 markFailedWithBackoff가 호출될 수 있음
+        verify(repository).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository).markAsPublished(eq(listOf(1L)), any())
     }
 
     @Test
     fun `단일 실행에서 다중 이벤트 배치 처리 확인`() {
         // Given - Repository가 연속으로 이벤트 반환 (하지만 run()은 한 번만 실행됨)
         val batch = listOf(createClaimedRow(1L), createClaimedRow(2L))
-        whenever(repository.claimBatch(any())).thenReturn(batch)
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
 
         // When - Relay 실행 (한 번)
         relay.run()
 
-        // Then - 한 번의 claimBatch로 모든 이벤트 처리
-        verify(repository, times(1)).claimBatch(config.batchSize)
-        verify(repository).markAsPublished(listOf(1L, 2L))
+        // Then - 한 번의 claimBatchByPartition으로 모든 이벤트 처리
+        verify(repository, times(1)).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository).markAsPublished(eq(listOf(1L, 2L)), any())
     }
 
     @Test
     fun `attempt_count가 높은 이벤트도 정상 처리됨`() {
         // Given - 재시도 횟수가 높은 이벤트 (Repository에서 반환)
         val highAttemptEvent = createClaimedRow(1L, attemptCount = 4)
-        whenever(repository.claimBatch(any())).thenReturn(listOf(highAttemptEvent))
+        whenever(repository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(listOf(highAttemptEvent))
 
         // When - Relay 실행
         relay.run()
 
         // Then - attempt_count와 상관없이 정상 처리됨
-        verify(repository).claimBatch(config.batchSize)
-        verify(repository).markAsPublished(listOf(1L))
+        verify(repository, atLeast(1)).claimBatchByPartition(
+            partition = eq(config.instanceId),
+            totalPartitions = eq(config.totalInstances),
+            limit = eq(config.batchSize),
+            now = any()
+        )
+        verify(repository, atLeast(1)).markAsPublished(eq(listOf(1L)), any())
     }
 
     /**

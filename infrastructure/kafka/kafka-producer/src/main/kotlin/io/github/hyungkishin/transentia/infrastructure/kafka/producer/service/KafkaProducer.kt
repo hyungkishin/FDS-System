@@ -7,9 +7,11 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.BiConsumer
 
 interface KafkaProducer<K : Serializable, V : SpecificRecordBase> {
-    fun send(topicName: String, key: K, message: V, callback: BiConsumer<SendResult<K, V>, Throwable>)
 
-    fun sendSync(topicName: String, key: K, message: V): SendResult<K, V>
+    fun send(topicName: String, message: V, callback: BiConsumer<SendResult<K, V>, Throwable>)
 
-    fun sendAsync(topicName: String, key: K, message: V): CompletableFuture<SendResult<K, V>>
+    fun sendSync(topicName: String, message: V): SendResult<K, V>
+
+    fun sendAsync(topicName: String, message: V): CompletableFuture<SendResult<K, V>>
+
 }

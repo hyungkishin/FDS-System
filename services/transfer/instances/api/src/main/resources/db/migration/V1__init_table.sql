@@ -12,7 +12,7 @@ $$
 $$;
 
 -- users 테이블
-CREATE TABLE users
+CREATE TABLE IF NOT EXISTS users
 (
     id                   BIGINT PRIMARY KEY,                    -- 사용자 고유 ID (Snowflake)
     name                 TEXT        NOT NULL,                  -- 사용자 이름
@@ -27,7 +27,7 @@ CREATE TABLE users
 );
 
 -- 인덱스
-CREATE INDEX idx_users_status_locked ON users (status, is_transfer_locked);
+CREATE INDEX IF NOT EXISTS idx_users_status_locked ON users (status, is_transfer_locked);
 
 -- 코멘트
 COMMENT ON TABLE users IS '송금 시스템 사용자 정보';
@@ -54,7 +54,7 @@ $$
     END
 $$;
 
-CREATE TABLE account_balances
+CREATE TABLE IF NOT EXISTS account_balances
 (
     id             BIGINT PRIMARY KEY,                         -- ID (Snowflake)
     user_id        BIGINT         NOT NULL,                    -- 사용자 ID (1:1 관계, 현재) -- TODO : REFERENCES users (id)
@@ -68,11 +68,10 @@ CREATE TABLE account_balances
 );
 
 -- 인덱스
-CREATE UNIQUE INDEX idx_account_balances_account_number ON account_balances (account_number);
-
-
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_balances_account_number ON account_balances (account_number);
 
 -- updated_at 자동 갱신 트리거
+DROP TRIGGER IF EXISTS trg_ab_touch_updated_at ON account_balances;
 CREATE OR REPLACE FUNCTION trg_ab_touch_updated_at()
     RETURNS trigger
     LANGUAGE plpgsql AS
@@ -109,7 +108,7 @@ CREATE TABLE IF NOT EXISTS transactions
     id                BIGINT PRIMARY KEY,                             -- 트랜잭션 ID (Snowflake)
     sender_user_id    BIGINT             NOT NULL,                    -- FK: users(id)
     receiver_user_id  BIGINT             NOT NULL,                    -- FK: users(id)
-    amount            NUMERIC(20, 8)     NOT NULL CHECK (amount > 0), -- scale=8
+    amount            BIGINT             NOT NULL CHECK (amount > 0), -- scale=8
 --     currency          currency_code      NOT NULL DEFAULT 'KRW',
     status            transaction_status NOT NULL DEFAULT 'PENDING',
     received_at       TIMESTAMPTZ        NOT NULL DEFAULT now(),      -- 수신/요청 시각
@@ -179,7 +178,7 @@ $$
     END
 $$;
 
-CREATE TABLE transaction_histories
+CREATE TABLE IF NOT EXISTS transaction_histories
 (
     id             BIGINT PRIMARY KEY,                  -- 이력 자체 PK
     transaction_id BIGINT                     NOT NULL, -- TODO: 논리적 FK 로 할지 고민필요. REFERENCES transactions (id),
@@ -193,7 +192,7 @@ COMMENT ON COLUMN transaction_histories.transaction_id IS '참조 트랜잭션 I
 COMMENT ON COLUMN transaction_histories.created_at IS '생성 시각';
 
 -- 인덱스
-CREATE INDEX idx_tx_histories_txid_created
+CREATE INDEX IF NOT EXISTS idx_tx_histories_txid_created
     ON transaction_histories (transaction_id, created_at);
 
 ---

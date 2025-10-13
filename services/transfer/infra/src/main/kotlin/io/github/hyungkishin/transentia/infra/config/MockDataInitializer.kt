@@ -1,6 +1,8 @@
 package io.github.hyungkishin.transentia.infra.config
 
 import io.github.hyungkishin.transentia.application.required.UserRepository
+import io.github.hyungkishin.transentia.common.model.Amount
+import io.github.hyungkishin.transentia.common.model.Currency
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
 import io.github.hyungkishin.transentia.container.model.user.*
 import io.github.hyungkishin.transentia.container.model.account.*
@@ -10,13 +12,9 @@ import org.springframework.boot.CommandLineRunner
 import org.springframework.stereotype.Component
 import java.time.Instant
 
-/**
- * FIXME: Auth Domain 생성 이후 삭제
- * TODO: USER 멀티 모듈로 별도 서버 독립할것.
- */
 @Component
 class MockDataInitializer(
-    private val userRepository: UserRepository  // userRepository 사용
+    private val userRepository: UserRepository
 ) : CommandLineRunner {
 
     override fun run(vararg args: String?) {
@@ -27,7 +25,7 @@ class MockDataInitializer(
                 SnowFlakeId(20001),
                 SnowFlakeId(10001),
                 "110-123-456789",
-                Money.fromDecimalString("10000.00000000"),
+                Amount.parse("100000", Currency.KRW),
                 0,
             )
 
@@ -50,7 +48,7 @@ class MockDataInitializer(
                 SnowFlakeId(20002),
                 SnowFlakeId(10002),
                 "110-987-654321",
-                Money.fromDecimalString("50000.00000000"),
+                Amount.parse("100000", Currency.KRW),
                 0
             )
 
@@ -73,7 +71,7 @@ class MockDataInitializer(
                 SnowFlakeId(20003),
                 SnowFlakeId(10003),
                 "110-111-222333",
-                Money.fromDecimalString("100000.00000000"),
+                Amount.parse("100000", Currency.KRW),
                 0
             )
 
@@ -84,7 +82,7 @@ class MockDataInitializer(
                 status = UserStatus.ACTIVE,
                 role = UserRole.USER,
                 accountBalance = blacklistAccount,
-                isTransferLocked = true,  // 블랙리스트
+                isTransferLocked = true,
                 transferLockReason = TransferLockReason("테스트용 제재"),
                 dailyTransferLimit = DailyTransferLimit.basic(),
                 createdAt = Instant.now(),

@@ -2,19 +2,21 @@ package transentia
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.kotlin.dsl.dependencies
-import org.gradle.kotlin.dsl.configure
 import org.gradle.api.tasks.testing.Test
+import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.dependencies
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 class SpringBootAppConventionPlugin : Plugin<Project> {
+
     override fun apply(target: Project) {
         target.pluginManager.apply("org.springframework.boot")
         target.pluginManager.apply("io.spring.dependency-management")
         target.pluginManager.apply("org.jetbrains.kotlin.jvm")
         target.pluginManager.apply("org.jetbrains.kotlin.plugin.spring")
         target.pluginManager.apply("org.jetbrains.kotlin.plugin.allopen")
+        target.pluginManager.apply("org.jetbrains.kotlin.kapt")
 
         target.extensions.configure<KotlinJvmProjectExtension> {
             jvmToolchain(21)
@@ -35,8 +37,6 @@ class SpringBootAppConventionPlugin : Plugin<Project> {
             add("implementation", "org.jetbrains.kotlin:kotlin-reflect")
 
             add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
-//            add("testImplementation", "io.kotest:kotest-runner-junit5")
-//            add("testImplementation", "io.kotest:kotest-assertions-core")
         }
 
         target.tasks.withType(Test::class.java).configureEach {

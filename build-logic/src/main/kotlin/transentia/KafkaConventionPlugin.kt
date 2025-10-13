@@ -13,7 +13,9 @@ class KafkaConventionPlugin : Plugin<Project> {
 
         target.afterEvaluate {
             dependencies {
+                // TODO : spring cloude stream 마이그레이션
                 add("implementation", "org.springframework.kafka:spring-kafka")
+                add("implementation", "org.apache.kafka:kafka-streams")
                 add("implementation", "com.fasterxml.jackson.module:jackson-module-kotlin")
                 add("testImplementation", "org.springframework.kafka:spring-kafka-test")
             }

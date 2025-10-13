@@ -21,34 +21,33 @@ class KafkaProducerImpl<K : Serializable, V : SpecificRecordBase>(
     }
 
     // 비동기 메서드 (하위 호환성 유지)
-    override fun send(topicName: String, key: K, message: V, callback: BiConsumer<SendResult<K, V>, Throwable>) {
+    override fun send(topicName: String, message: V, callback: BiConsumer<SendResult<K, V>, Throwable>) {
         log.info("Sending message={} to topic={}", message, topicName)
 
         try {
-            kafkaTemplate.send(topicName, key, message)
-                .whenComplete { result, ex ->
-                    callback.accept(result, ex)
-                }
+            kafkaTemplate.send(topicName, message).whenComplete { result, ex ->
+                callback.accept(result, ex)
+            }
         } catch (e: Exception) {
-            log.error("Error on kafka producer with key={}, message={} and exception={}", key, message, e)
-            throw KafkaProducerException("Error on kafka producer with key=$key and message=$message", e)
+            log.error("Error on kafka producer with key={}, message={} and exception={}", message, e)
+            throw KafkaProducerException("Error on kafka producer with message=$message", e)
         }
     }
 
     // 동기 메서드
-    override fun sendSync(topicName: String, key: K, message: V): SendResult<K, V> {
+    override fun sendSync(topicName: String, message: V): SendResult<K, V> {
         log.info("Sending message={} to topic={} synchronously", message, topicName)
 
         try {
-            return kafkaTemplate.send(topicName, key, message).get()
+            return kafkaTemplate.send(topicName, message).get()
         } catch (e: Exception) {
-            log.error("Error on synchronous kafka producer with key={}, message={} and exception={}", key, message, e)
-            throw KafkaProducerException("Error on synchronous kafka producer with key=$key and message=$message", e)
+            log.error("Error on synchronous kafka producer with key={}, message={} and exception={}", message, e)
+            throw KafkaProducerException("Error on synchronous kafka producer with message=$message", e)
         }
     }
 
-    override fun sendAsync(topicName: String, key: K, message: V): CompletableFuture<SendResult<K, V>> {
-        return kafkaTemplate.send(topicName, key, message)
+    override fun sendAsync(topicName: String, message: V): CompletableFuture<SendResult<K, V>> {
+        return kafkaTemplate.send(topicName, message)
     }
 
 }

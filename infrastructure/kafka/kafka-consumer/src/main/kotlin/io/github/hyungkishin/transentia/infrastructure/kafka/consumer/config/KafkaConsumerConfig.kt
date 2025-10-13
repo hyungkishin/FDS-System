@@ -23,6 +23,7 @@ class KafkaConsumerConfig<K : Serializable, V : SpecificRecordBase>(
     fun consumerConfigs(): Map<String, Any> {
         return mutableMapOf<String, Any>().apply {
             put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConfigData.bootstrapServers)
+            put(ConsumerConfig.GROUP_ID_CONFIG, kafkaConsumerConfigData.consumerGroupId)
             put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, kafkaConsumerConfigData.keyDeserializer)
             put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, kafkaConsumerConfigData.valueDeserializer)
             put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, kafkaConsumerConfigData.autoOffsetReset)

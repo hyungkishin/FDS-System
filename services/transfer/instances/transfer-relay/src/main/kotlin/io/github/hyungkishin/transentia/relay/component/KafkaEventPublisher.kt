@@ -21,9 +21,9 @@ class KafkaEventPublisher(
      *
      * @throws Exception 전송 실패 시 예외 발생
      */
-    fun publish(topicName: String, key: String, event: TransferEventAvroModel) {
+    fun publish(topicName: String, event: TransferEventAvroModel) {
         try {
-            kafkaProducer.sendSync(topicName, key, event)
+            kafkaProducer.sendSync(topicName, event)
             log.debug("Successfully published event: eventId={}, type={}",
                 event.eventId, event.eventType)
         } catch (e: Exception) {

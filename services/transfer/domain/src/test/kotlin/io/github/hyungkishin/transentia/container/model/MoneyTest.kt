@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.container.model
 
-import io.github.hyungkishin.transentia.container.model.account.Money
+import io.github.hyungkishin.transentia.common.model.Money
 import io.kotest.assertions.throwables.shouldThrowExactly
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe

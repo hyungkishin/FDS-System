@@ -8,6 +8,9 @@ dependencies {
     implementation("io.confluent:kafka-avro-serializer:7.9.2")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
+
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
 
 avro {
@@ -30,4 +33,8 @@ tasks.withType<com.github.davidmc24.gradle.plugin.avro.GenerateAvroJavaTask>().c
 // Kotlin 컴파일이 Avro 생성 후에 실행되도록 설정
 tasks.compileKotlin {
     dependsOn(tasks.generateAvroJava)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

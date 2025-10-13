@@ -1,7 +1,7 @@
 package io.github.hyungkishin.transentia.container.model
 
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.container.model.account.Money
+import io.github.hyungkishin.transentia.common.model.Money
 import io.github.hyungkishin.transentia.container.enums.TransactionStatus
 import io.github.hyungkishin.transentia.container.model.transaction.Transaction
 import org.junit.jupiter.api.Assertions.*

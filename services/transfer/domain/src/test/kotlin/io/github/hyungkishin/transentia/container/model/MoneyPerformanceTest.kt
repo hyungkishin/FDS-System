@@ -1,6 +1,7 @@
 package io.github.hyungkishin.transentia.container.model
 
-import io.github.hyungkishin.transentia.container.model.account.Money
+import io.github.hyungkishin.transentia.common.model.Currency
+import io.github.hyungkishin.transentia.common.model.Money
 import io.kotest.core.spec.style.StringSpec
 import org.junit.jupiter.api.Disabled
 import java.math.BigDecimal
@@ -29,11 +30,11 @@ class MoneyPerformanceTest : StringSpec({
     }
 
     "Money(Long 기반) 성능 (연산 누적값 확인용)" {
-        val moneyOne = Money.fromDecimalString("1.0")
+        val moneyOne = Money.fromMajor("1.0", )
         var sumMoney: Money
 
         val moneyTime = measureNanoTime {
-            var sum = Money.fromDecimalString("0.0")
+            var sum = Money.parseMajorString("0.0", Currency.KRW)
             repeat(N) {
                 sum = sum.add(moneyOne)
             }

@@ -1,7 +1,9 @@
 package io.github.hyungkishin.transentia.infra.rdb.repository
 
 import io.github.hyungkishin.transentia.infra.rdb.entity.UserJpaEntity
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -16,7 +18,6 @@ interface UserJpaRepository: JpaRepository<UserJpaEntity, Long> {
         """
     )
     fun findByIdWithAccount(@Param("id") id: Long): UserJpaEntity?
-
 
     /**
      * 계좌번호로 User + Account 조회

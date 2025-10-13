@@ -16,6 +16,9 @@ class KafkaConsumerConfigData {
     lateinit var valueDeserializer: String
 
     @NotBlank
+    lateinit var consumerGroupId: String
+
+    @NotBlank
     lateinit var autoOffsetReset: String
 
     @NotBlank
@@ -53,4 +56,5 @@ class KafkaConsumerConfigData {
 
     @NotNull
     var maxPartitionFetchBytesBoostFactor: Int = 1
+
 }

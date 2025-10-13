@@ -6,6 +6,8 @@ import io.github.hyungkishin.transentia.container.event.TransferEvent
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
+import java.sql.Timestamp
+import java.time.Instant
 
 /**
  * Outbox 패턴을 위한 송금 이벤트 저장소 구현체
@@ -33,14 +35,16 @@ class TransferEventsOutboxJdbcRepository(
      *
      * @param row 저장할 송금 이벤트 정보
      */
-    override fun save(row: TransferEvent) {
+    override fun save(row: TransferEvent, now: Instant) {
+        val timestamp = Timestamp.from(now)  // Instant → Timestamp 변환
+        
         val sql = """
             INSERT INTO transfer_events(
               event_id, event_version, aggregate_type, aggregate_id, event_type,
               payload, headers, status, attempt_count, created_at, updated_at, next_retry_at
             ) VALUES (:eventId, 1, :aggType, :aggId, :eventType,
                      CAST(:payload AS JSONB), CAST(:headers AS JSONB),
-                     'PENDING', 0, now(), now(), now())
+                     'PENDING', 0, :now, :now, :now)
             ON CONFLICT (event_id) DO NOTHING
         """.trimIndent()
 
@@ -51,7 +55,8 @@ class TransferEventsOutboxJdbcRepository(
                 "aggId" to row.aggregateId,
                 "eventType" to row.eventType,
                 "payload" to row.payload,
-                "headers" to row.headers
+                "headers" to row.headers,
+                "now" to timestamp  // Timestamp 사용
             )
         )
     }
@@ -71,16 +76,22 @@ class TransferEventsOutboxJdbcRepository(
      * @param limit 한 번에 처리할 최대 이벤트 수
      * @return 처리할 이벤트 목록
      */
-    override fun claimBatch(limit: Int): List<ClaimedRow> {
+    override fun claimBatch(
+        limit: Int,
+        now: Instant
+    ): List<ClaimedRow> {
+        val stuckThreshold = Timestamp.from(now.minusSeconds(600))  // 10분 전
+        val currentTime = Timestamp.from(now)
+        
         val sql = """
           WITH grabbed AS (
             SELECT event_id
             FROM transfer_events
             WHERE (
               status IN ('PENDING', 'FAILED')
-              OR (status = 'SENDING' AND updated_at < now() - interval '10 minutes')
+              OR (status = 'SENDING' AND updated_at < :stuckThreshold)
             )
-              AND next_retry_at <= now()
+              AND next_retry_at <= :now
               AND attempt_count < 5
             ORDER BY 
               CASE 
@@ -98,14 +109,22 @@ class TransferEventsOutboxJdbcRepository(
                    WHEN t.status = 'SENDING' THEN t.attempt_count
                    ELSE t.attempt_count + 1 
                  END,
-                 updated_at = now()
+                 updated_at = :now
             FROM grabbed g
            WHERE t.event_id = g.event_id
           RETURNING t.event_id, t.aggregate_id, t.payload::text AS payload, 
                    t.headers::text AS headers, t.attempt_count
         """.trimIndent()
 
-        return jdbc.query(sql, mapOf("limit" to limit), claimedRowMapper)
+        return jdbc.query(
+            sql, 
+            mapOf(
+                "limit" to limit,
+                "now" to currentTime,
+                "stuckThreshold" to stuckThreshold
+            ), 
+            claimedRowMapper
+        )
     }
 
     /**
@@ -116,18 +135,111 @@ class TransferEventsOutboxJdbcRepository(
      *
      * @param ids Kafka 발행에 성공한 이벤트 ID 목록
      */
-    override fun markAsPublished(ids: List<Long>) {
+    override fun markAsPublished(
+        ids: List<Long>,
+        now: Instant
+    ) {
         if (ids.isEmpty()) return
+        
+        val timestamp = Timestamp.from(now)
 
         val sql = """
             UPDATE transfer_events 
             SET status = 'PUBLISHED',
-                published_at = now(),
-                updated_at = now()
+                published_at = :now,
+                updated_at = :now
             WHERE event_id IN (:ids)
         """.trimIndent()
 
-        jdbc.update(sql, mapOf("ids" to ids))
+        jdbc.update(sql, mapOf(
+            "ids" to ids,
+            "now" to timestamp
+        ))
+    }
+
+    /**
+     * 파티션 기반으로 이벤트 배치를 조회하고 SENDING 상태로 변경한다.
+     *
+     * MOD(event_id, totalPartitions) = partition 조건으로 각 인스턴스가
+     * 서로 다른 이벤트를 처리하도록 분산한다. 이를 통해:
+     * - 락 경합 감소 (각 인스턴스가 다른 행 처리)
+     * - 균등한 부하 분산
+     * - 처리량 향상
+     *
+     * SKIP LOCKED는 여전히 유지하여 예외 상황에서도 안전성을 보장한다.
+     *
+     * @param partition 현재 인스턴스의 파티션 ID
+     * @param totalPartitions 전체 인스턴스 수
+     * @param limit 한 번에 처리할 최대 이벤트 수
+     * @return 처리할 이벤트 목록
+     */
+
+    // EC2 <- 떠있음...
+    // Spring batch <- 파게이트 일때. 실행한 시간기준으로 ...
+    // TODO : AWS Batch <- 쓸꺼면 ( 잘모름 확인 필요. ) ( 이벤트 브릿지 ( 크론이랑 비슷 크론처럼 쓸수 있고 이벤트를 발행하는 조건을 줄 수 있음 [확인필요])
+    // 규모 <- 선정 TPS 2000 ()
+    // 결제 <- TPS <- ??
+    // Why ? -> 200 TPS 2000TPS <- 스케줄  TODO : 스케쥴 <-
+    // 쿼츠 <- 인프라 비용 ? <- 학습곡선 + 인프라 비용 ????? 1 <-  2 <-
+    // 스프링 배치 ? <- 학습곡선 올라가고 + 파게이트 +
+
+    // 결론: 올리면. 배보다 배꼽이 더 크다 ....
+
+    // 최종 결정 :
+    override fun claimBatchByPartition(
+        partition: Int,
+        totalPartitions: Int,
+        limit: Int,
+        now: Instant
+    ): List<ClaimedRow> {
+        val stuckThreshold = Timestamp.from(now.minusSeconds(600))  // 10분 전
+        val currentTime = Timestamp.from(now)
+        
+        val sql = """
+          WITH grabbed AS (
+            SELECT event_id
+            FROM transfer_events
+            WHERE (
+              status IN ('PENDING', 'FAILED')
+              OR (status = 'SENDING' AND updated_at < :stuckThreshold)
+            )
+              AND next_retry_at <= :now
+              AND attempt_count < 5
+              AND MOD(event_id, :totalPartitions) = :partition
+            ORDER BY 
+              CASE 
+                WHEN status = 'PENDING' THEN 0 
+                WHEN status = 'SENDING' THEN 1
+                ELSE 2 
+              END,
+              created_at
+            FOR UPDATE SKIP LOCKED
+            LIMIT :limit
+          )
+          UPDATE transfer_events t
+             SET status = 'SENDING',
+                 attempt_count = CASE 
+                   WHEN t.status = 'SENDING' THEN t.attempt_count
+                   ELSE t.attempt_count + 1 
+                 END,
+                 updated_at = :now
+            FROM grabbed g
+           WHERE t.event_id = g.event_id
+          RETURNING t.event_id, t.aggregate_id, t.payload::text AS payload, 
+                   t.headers::text AS headers, t.attempt_count
+        """.trimIndent()
+
+        return jdbc.query(
+            sql, 
+            mapOf(
+                "limit" to limit,
+                "partition" to partition,
+                "totalPartitions" to totalPartitions,
+                "now" to currentTime,
+                "stuckThreshold" to stuckThreshold
+            ), 
+            claimedRowMapper
+        )
     }
 
     /**
@@ -147,7 +259,15 @@ class TransferEventsOutboxJdbcRepository(
      * @param cause 실패 원인
      * @param backoffMillis 다음 재시도까지 대기할 밀리초
      */
-    override fun markFailedWithBackoff(id: Long, cause: String?, backoffMillis: Long) {
+    override fun markFailedWithBackoff(
+        id: Long,
+        cause: String?,
+        backoffMillis: Long,
+        now: Instant
+    ) {
+        val currentTime = Timestamp.from(now)
+        val nextRetry = Timestamp.from(now.plusMillis(backoffMillis))
+        
         val sql = """
         UPDATE transfer_events
         SET status = CASE 
@@ -155,8 +275,8 @@ class TransferEventsOutboxJdbcRepository(
               ELSE 'FAILED'::transfer_outbox_status
             END,
             last_error = :errorMessage,
-            updated_at = now(),
-            next_retry_at = now() + (:backoffMs || ' milliseconds')::interval
+            updated_at = :now,
+            next_retry_at = :nextRetry
         WHERE event_id = :eventId
     """.trimIndent()
 
@@ -164,7 +284,8 @@ class TransferEventsOutboxJdbcRepository(
             sql, mapOf(
                 "eventId" to id,
                 "errorMessage" to (cause ?: "UNKNOWN"),
-                "backoffMs" to backoffMillis
+                "now" to currentTime,
+                "nextRetry" to nextRetry
             )
         )
     }

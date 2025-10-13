@@ -1,11 +1,9 @@
 plugins {
-    id("transentia.kotlin-library")
     id("transentia.spring-boot-app")
     id("transentia.kafka-convention")
 }
 
 dependencies {
-    // 프로젝트 의존성
     implementation(project(":transfer-application"))
     implementation(project(":transfer-infra"))
     implementation(project(":common-application"))
@@ -14,12 +12,19 @@ dependencies {
     implementation(project(":kafka-producer"))
     implementation(project(":kafka-model"))
 
-    // Relay 특화 의존성만
     implementation("io.confluent:kafka-avro-serializer:7.9.2")
+
+    // 테스트 의존성 추가
+    testImplementation(project(":transfer-domain"))  // TransferEvent 사용을 위해 TODO application 으로 eventType 분리 개선
+    testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
     testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
 }
 
-// 성능 테스트는 Relay 특화 기능이므로 유지
+tasks.withType<Test> {
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
+
 tasks.register<Test>("performanceTest") {
     useJUnitPlatform()
     include("**/*PerformanceTest*")
