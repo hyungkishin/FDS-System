@@ -26,7 +26,8 @@ class TransferController(
 //        idem: String,
         @Valid @RequestBody request: TransferRequest
     ): TransferResponse {
-        val result = registerTransaction.create(request.toCommand())
+        val senderId = 10001L
+        val result = registerTransaction.createTransfer(request.toCommand(senderId))
         return TransferResponse.of(result)
     }
 
@@ -34,8 +35,8 @@ class TransferController(
      * 단건 조회
      */
     @GetMapping("/{transactionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun get(@PathVariable transactionId: Long): TransferResponse {
-        val res = registerTransaction.get(transactionId)
+    fun getTransfer(@PathVariable transactionId: Long): TransferResponse {
+        val res = registerTransaction.findTransfer(transactionId)
         return TransferResponse.of(res)
     }
 

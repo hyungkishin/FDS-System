@@ -1,0 +1,84 @@
+{
+  "type": "record",
+  "name": "TransferEventAvroModel",
+  "namespace": "io.github.hyungkishin.transentia.infrastructure.kafka.model",
+  "doc": "Transfer service event model for Kafka messaging",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "long",
+      "doc": "Unique event identifier (snowflake ID)"
+    },
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "TransferEventType",
+        "symbols": ["TRANSFER_COMPLETED", "TRANSFER_FAILED"]
+      },
+      "doc": "Type of transfer event"
+    },
+    {
+      "name": "aggregateId",
+      "type": "string",
+      "doc": "Transaction aggregate ID as string"
+    },
+    {
+      "name": "transactionId",
+      "type": "long",
+      "doc": "Transaction snowflake ID"
+    },
+    {
+      "name": "senderId",
+      "type": "long",
+      "doc": "Sender user ID (nullable for failed events)"
+    },
+    {
+      "name": "receiverId",
+      "type": "long",
+      "doc": "Receiver user ID (nullable for failed events)"
+    },
+    {
+      "name": "amount",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Transfer amount as decimal string"
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "TransferStatus",
+        "symbols": ["COMPLETED", "FAILED"]
+      },
+      "doc": "Transfer result status"
+    },
+    {
+      "name": "reason",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Failure reason (only for failed events)"
+    },
+    {
+      "name": "occurredAt",
+      "type": "long",
+      "doc": "Event occurrence timestamp (epoch millis)"
+    },
+    {
+      "name": "headers",
+      "type": "string",
+      "doc": "Event headers as JSON string"
+    },
+    {
+      "name": "createdAt",
+      "type": "long",
+      "doc": "Event creation timestamp"
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "default": "v1",
+      "doc": "Schema version"
+    }
+  ]
+}

@@ -2,72 +2,72 @@ package io.github.hyungkishin.transentia.application
 
 import io.github.hyungkishin.transentia.application.provided.TransactionRegister
 import io.github.hyungkishin.transentia.application.provided.command.TransferRequestCommand
-import io.github.hyungkishin.transentia.application.required.AccountBalanceRepository
 import io.github.hyungkishin.transentia.application.required.TransactionRepository
+import io.github.hyungkishin.transentia.application.required.UserRepository
 import io.github.hyungkishin.transentia.application.required.command.TransferResponseCommand
-import io.github.hyungkishin.transentia.application.required.event.EventPublisherPort
 import io.github.hyungkishin.transentia.common.error.CommonError
 import io.github.hyungkishin.transentia.common.error.DomainException
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
-import io.github.hyungkishin.transentia.common.snowflake.TransferId
-import io.github.hyungkishin.transentia.consumer.model.Transaction
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
+import io.github.hyungkishin.transentia.container.model.transaction.Transaction
+import io.github.hyungkishin.transentia.container.validator.transfer.TransferValidator
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
 class TransactionService(
     private val transactionRepository: TransactionRepository,
-    private val accountBalanceRepository: AccountBalanceRepository,
+    private val userRepository: UserRepository,
     private val transactionHistoryService: TransactionHistoryService,
     private val idGenerator: IdGenerator,
-    private val eventPublisher: EventPublisherPort
+    private val eventPublisher: ApplicationEventPublisher,
 ) : TransactionRegister {
 
     @Transactional
-    override fun create(command: TransferRequestCommand): TransferResponseCommand {
-        val sender = accountBalanceRepository.findByUserId(command.senderUserId())
-            ?: throw DomainException(
-                CommonError.NotFound("account_balance", command.senderUserId().toString()),
-                "송신자 계좌 정보를 찾을 수 없습니다. userId=${command.senderUserId()}"
-            )
-
-        val receiver = accountBalanceRepository.findByUserId(command.receiverUserId())
-            ?: throw DomainException(
-                CommonError.NotFound("account_balance", command.receiverUserId().toString()),
-                "수신자 계좌 정보를 찾을 수 없습니다. userId=${command.receiverUserId()}"
-            )
-
-        val transfer = Transaction.of(
-            TransferId(idGenerator.nextId()), sender.userId, receiver.userId, command.amount()
+    override fun createTransfer(command: TransferRequestCommand): TransferResponseCommand {
+        val sender = userRepository.findById(command.senderId) ?: throw DomainException(
+            CommonError.NotFound("account_balance", command.senderId.toString()),
+            "송신자 정보를 찾을 수 없습니다. senderId=${command.senderId}"
         )
 
-        try {
-            sender.withdrawOrThrow(command.amount())
-            receiver.deposit(command.amount())
+        val receiver = userRepository.findByAccountNumber(command.receiverAccountNumber) ?: throw DomainException(
+            CommonError.NotFound("account_balance", command.receiverAccountNumber.toString()),
+            "수신자 계좌 정보를 찾을 수 없습니다. snowFlakeId=${command.receiverAccountNumber}"
+        )
 
-            accountBalanceRepository.save(sender)
-            accountBalanceRepository.save(receiver)
+        // TODO: - 테스트의 용이성과 확장성 / 재사용성 검증하기
+        TransferValidator.validate(sender, receiver, command.amount())
 
-            val saved = transactionRepository.save(transfer)
-            transactionHistoryService.recordSuccess(saved)
+        val transaction = Transaction.of(
+            SnowFlakeId(idGenerator.nextId()),
+            sender.id,
+            receiver.id,
+            command.amount()
+        )
 
-            eventPublisher.publish(saved.complete())
+        sender.accountBalance.withdrawOrThrow(command.amount())
+        receiver.accountBalance.deposit(command.amount())
 
-            return TransferResponseCommand.from(saved)
-        } catch (ex: RuntimeException) {
-            transactionHistoryService.recordFail(transfer, ex.message)
-            eventPublisher.publish(transfer.fail(ex.message ?: "SYSTEM_ERROR"))
-            throw ex
-        }
+        userRepository.save(sender)
+        userRepository.save(receiver)
+
+        val completeEvent = transaction.complete()
+        val savedTransaction = transactionRepository.save(transaction)
+
+        // TODO: outbox ( kafka publish ) + relay 서버를 fadeout 하고, CDC 방식으로 전환.
+        eventPublisher.publishEvent(completeEvent)
+
+        return TransferResponseCommand.from(savedTransaction)
     }
 
-    override fun get(transactionId: Long): TransferResponseCommand {
+    override fun findTransfer(transactionId: Long): TransferResponseCommand {
         val tx = transactionRepository.findById(transactionId)
             ?: throw DomainException(
                 CommonError.NotFound("transaction", transactionId.toString()),
                 "송금 이력이 존재하지 않습니다. id=$transactionId"
             )
-        return TransferResponseCommand.Companion.from(tx)
+        return TransferResponseCommand.from(tx)
     }
 
 }

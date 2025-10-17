@@ -1,29 +1,21 @@
 plugins {
-    kotlin("jvm")
-    kotlin("plugin.spring")
-    kotlin("plugin.jpa")
+    id("transentia.spring-library")
+    id("transentia.spring-jpa")
+    id("transentia.kafka-convention")
+    id("transentia.code-coverage")
 }
 
 dependencies {
     implementation(project(":fds-application"))
     implementation(project(":fds-domain"))
-    implementation(project(":shared-common"))
+    implementation(project(":common-domain"))
+    implementation(project(":kafka-consumer"))
+    implementation(project(":kafka-model"))
 
-    // Spring Data JPA & JDBC (RDB 어댑터 구현)
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("io.confluent:kafka-avro-serializer:7.9.2")
+    implementation("org.apache.avro:avro:1.11.4")
+    implementation("io.hypersistence:hypersistence-utils-hibernate-63:3.7.0")
 
-    // Kafka (이벤트 퍼블리셔 어댑터 구현)
-    implementation("org.springframework.kafka:spring-kafka")
-
-    // JSON 직렬화 (Kafka 메시지에 필요)
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
-
-    // DB 드라이버
-    runtimeOnly("org.postgresql:postgresql")
-
-    // 테스트
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.kafka:spring-kafka-test")
     testImplementation("org.testcontainers:junit-jupiter")

@@ -1,51 +1,46 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 
-import io.github.hyungkishin.transentia.consumer.enums.TransactionHistoryStatus
-import io.github.hyungkishin.transentia.consumer.model.TransactionHistory
+import io.github.hyungkishin.transentia.container.model.transaction.TransactionHistory
 import jakarta.persistence.*
 import org.hibernate.Hibernate
-import java.time.LocalDateTime
+import java.time.Instant
 
 @Entity
-@Table(name = "transaction_histories")
+@Table(
+    name = "transaction_histories",
+    indexes = [
+        Index(name = "idx_txh_txid_created_at", columnList = "transaction_id, created_at DESC"),
+        Index(name = "idx_txh_status_created_at", columnList = "status, created_at DESC")
+    ]
+)
 class TransactionHistoryJpaEntity(
 
     @Id
     @Column(nullable = false)
-    val id: Long, // Snowflake 기반 ID
+    val id: Long, // Snowflake
 
     @Column(name = "transaction_id", nullable = false)
-    val transactionId: Long, // Snowflake 기반 ID
+    val transactionId: Long, // Snowflake
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    val status: TransactionHistoryStatus,
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    val createdAt: LocalDateTime = LocalDateTime.now()
+    @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
+    val createdAt: Instant = Instant.now()
 ) {
 
     companion object {
         fun from(domain: TransactionHistory): TransactionHistoryJpaEntity =
             TransactionHistoryJpaEntity(
                 id = domain.id.value,
-                transactionId = domain.transferId.value,
-                status = domain.status,
-                createdAt = domain.createdAt
+                transactionId = domain.transactionId.value,
             )
     }
 
-    /**
-     * 프록시 안전 equals/hashCode (ID 기반)
-     */
     override fun equals(other: Any?): Boolean {
-        if (other == null) return false
-        if (Hibernate.getClass(this) != Hibernate.getClass(other)) return false
+        if (this === other) return true
+        if (other == null || Hibernate.getClass(this) != Hibernate.getClass(other)) return false
         other as TransactionHistoryJpaEntity
         return this.id == other.id
     }
 
     override fun hashCode(): Int = id.hashCode()
-
 }

@@ -6,26 +6,81 @@ spring:
     username: postgres
     password: pass1234
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: create   # 개발 단계에서는 create/update, 운영은 validate/none
-    show-sql: true
+      ddl-auto: none
+    show-sql: false
 
-  kafka:
-    bootstrap-servers: localhost:9094
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-    properties:
-      spring.json.add.type.headers: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
 
 logging:
   level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.kafka: INFO
+
+kafka-config:
+  bootstrap-servers: host.docker.internal:9094
+  schema-registry-url-key: schema.registry.url
+  schema-registry-url: http://localhost:8085
+  num-of-partitions: 3
+  replication-factor: 1
+
+kafka-producer-config:
+  keySerializer: org.apache.kafka.common.serialization.StringSerializer
+  valueSerializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+  compressionType: lz4
+  acks: "1"
+  batchSize: 65536        # 64KB
+  batchSizeBoostFactor: 1
+  lingerMs: 5             # 배치 대기 시간
+  requestTimeoutMs: 1000
+  retryCount: 0           # 재시도 없음 (빠른 실패)
+
+kafka-consumer-config:
+  key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+  consumer-group-id: fds-consumer-group
+  auto-offset-reset: earliest
+  specific-avro-reader-key: specific.avro.reader
+  specific-avro-reader: true
+  batch-listener: true
+  auto-startup: true
+  concurrency-level: 8
+  session-timeout-ms: 10000
+  heartbeat-interval-ms: 3000
+  max-poll-interval-ms: 300000
+  max-poll-records: 500
+  max-partition-fetch-bytes-default: 1048576
+  max-partition-fetch-bytes-boost-factor: 1
+  poll-timeout-ms: 150
+
+app:
+  kafka:
+    topics:
+      transfer-events: transfer-transaction-events
 
 id:
   snowflake:
     node-id: ${SNOWFLAKE_NODE_ID:1}
     custom-epoch: 1704067200000
     max-clock-backward-ms: 5
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0

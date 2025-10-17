@@ -3,9 +3,9 @@ package io.github.hyungkishin.transentia.application
 import io.github.hyungkishin.transentia.application.provided.TransactionHistoryRegister
 import io.github.hyungkishin.transentia.application.required.TransactionHistoryRepository
 import io.github.hyungkishin.transentia.common.snowflake.IdGenerator
-import io.github.hyungkishin.transentia.common.snowflake.TransactionId
-import io.github.hyungkishin.transentia.consumer.model.Transaction
-import io.github.hyungkishin.transentia.consumer.model.TransactionHistory
+import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
+import io.github.hyungkishin.transentia.container.model.transaction.Transaction
+import io.github.hyungkishin.transentia.container.model.transaction.TransactionHistory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
@@ -16,15 +16,9 @@ class TransactionHistoryService(
     private val idGenerator: IdGenerator,
 ) : TransactionHistoryRegister {
 
-    @Transactional
-    override fun recordSuccess(transaction: Transaction) {
-        val history = TransactionHistory.successOf(transaction, TransactionId(idGenerator.nextId()))
-        transactionHistoryRepository.save(history)
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    override fun recordFail(transaction: Transaction, reason: String?) {
-        val history = TransactionHistory.failOf(transaction, TransactionId(idGenerator.nextId()), reason)
+    override fun saveTransferHistory(transaction: Transaction) {
+        val history = TransactionHistory.of(transaction, SnowFlakeId(idGenerator.nextId()))
         transactionHistoryRepository.save(history)
     }
 

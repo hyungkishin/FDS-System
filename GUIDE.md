@@ -104,10 +104,10 @@ sequenceDiagram
     participant Admin as Admin Console
 
     Kafka->>TxProjector: consume transfer.completed
-    TxProjector->>Projection: 업데이트 recent_tx:{userId}
+    TxProjector->>Projection: 업데이트 recent_tx:{snowFlakeId}
 
     Kafka->>FDS: consume transfer.completed
-    FDS->>Redis: 조회 fds:detect:{userId}:{rule}
+    FDS->>Redis: 조회 fds:detect:{snowFlakeId}:{rule}
     alt HIT
         FDS->>RDB: INSERT detection_log (중복 탐지)
         FDS-->>none: 탐지 종료
@@ -123,7 +123,7 @@ sequenceDiagram
         alt 이상 없음
             FDS-->>none: 탐지 종료
         else 이상 탐지
-            FDS->>Redis: SET fds:detect:{userId}:{rule} = true
+            FDS->>Redis: SET fds:detect:{snowFlakeId}:{rule} = true
             FDS->>RDB: INSERT detection_log
             par 알림 및 트리거
                 FDS->>Slack: 이상 거래 탐지 알림
@@ -272,11 +272,11 @@ sequenceDiagram
 
 %% 거래 조회 Projection 구성
     Kafka->>TxProjector: consume transfer.completed
-    TxProjector->>Projection: 업데이트 recent_tx:{userId}
+    TxProjector->>Projection: 업데이트 recent_tx:{snowFlakeId}
 
 %% 이상 거래 탐지기
     Kafka->>FDS: consume transfer.completed
-    FDS->>Redis: 조회 fds:detect:{userId}:{rule}
+    FDS->>Redis: 조회 fds:detect:{snowFlakeId}:{rule}
     alt 캐시 HIT
         FDS->>RDB: INSERT detection_log (결과: 중복 탐지됨)
         FDS-->>none: 탐지 종료
@@ -292,7 +292,7 @@ sequenceDiagram
         alt 이상 없음
             FDS-->>none: 탐지 종료
         else 이상 탐지
-            FDS->>Redis: SET fds:detect:{userId}:{rule} = true (TTL 5분)
+            FDS->>Redis: SET fds:detect:{snowFlakeId}:{rule} = true (TTL 5분)
             FDS->>RDB: INSERT detection_log (hash, score, 룰 코드 포함)
             par 알림 및 트리거
                 FDS->>Slack: 이상 거래 탐지 알림
@@ -370,9 +370,9 @@ output = """
 | `tx:{txId}:status = SYNC_PENDING`    | RDB 실패 후 보정 대기            | 5분 (300s) | SyncConsumer가 복구하기 위한 유예 시간 |
 | `tx:{txId}:status = COMPLETED`       | 거래 성공 상태                  | 5~10분     | 탐지, 조회 구성, 상태 추적용 |
 | `tx:{txId}:status = KAFKA_FAILED`    | Kafka emit 실패 후 DLQ 전송됨   | 10분       | DLQ 재처리 감지용 |
-| `fds:detect:{userId}:{rule}`         | 룰 중복 탐지 방지                | 5분 (300s) | 동일 룰 알림/탐지 중복 방지 |
+| `fds:detect:{snowFlakeId}:{rule}`         | 룰 중복 탐지 방지                | 5분 (300s) | 동일 룰 알림/탐지 중복 방지 |
 | `rollback:block:{txId}`              | 롤백 중복 실행 방지             | 5분 (300s) | 동시에 rollback.approved 중복 방지 |
-| `recentTx:{userId}` (ZSET)           | 10분 간 거래 이력               | 지속 유지   | sliding window 룰 기반 탐지 (ZREMRANGEBYSCORE 사용)
+| `recentTx:{snowFlakeId}` (ZSET)           | 10분 간 거래 이력               | 지속 유지   | sliding window 룰 기반 탐지 (ZREMRANGEBYSCORE 사용)
 
 ---
 

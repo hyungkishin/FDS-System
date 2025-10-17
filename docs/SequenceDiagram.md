@@ -26,7 +26,7 @@ sequenceDiagram
     participant Kafka as Kafka Broker
 
     Client->>API: POST /transfer (금액, 수취인, device)
-    API->>TransferService: tryTransfer(userId, amount)
+    API->>TransferService: tryTransfer(snowFlakeId, amount)
 
     TransferService->>Redis: EVAL Lua 선차감
     alt 차감 성공
@@ -64,7 +64,7 @@ sequenceDiagram
     TxWorker->>RDB: INSERT INTO tx (PENDING)
     alt INSERT 성공
         TxWorker->>Redis: SET tx:{txId}:status = PENDING EX 600
-        TxWorker->>Kafka: emit transfer.created { txId, userId, traceId }
+        TxWorker->>Kafka: emit transfer.created { txId, snowFlakeId, traceId }
     else INSERT 실패
         TxWorker->>Redis: INCRBY 복원
         TxWorker->>DLQ: emit tx.sync_required

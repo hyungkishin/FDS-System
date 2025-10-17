@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: transfer-relay
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transfer
+    username: postgres
+    password: pass1234
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 3
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+
+server:
+  port: 8081
+
+kafka-config:
+  bootstrap-servers: host.docker.internal:9094
+  schema-registry-url-key: schema.registry.url
+  schema-registry-url: http://localhost:8085
+  num-of-partitions: 3
+  replication-factor: 1
+
+kafka-producer-config:
+  keySerializer: org.apache.kafka.common.serialization.StringSerializer
+  valueSerializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+  compressionType: lz4
+  acks: "1"
+  batchSize: 65536        # 64KB
+  batchSizeBoostFactor: 1
+  lingerMs: 5             # 배치 대기 시간
+  requestTimeoutMs: 5000
+  retryCount: 3
+
+app:
+  outbox:
+    relay:
+      batchSize: 1000                     # 테스트에서는 더 크게
+      fixedDelayMs: 1000
+      initialDelayMs: 2000
+      timeoutSeconds: 10
+      threadPoolSize: 4
+      baseBackoffMs: 5000
+      maxBackoffMs: 600000
+      stuckThresholdSeconds: 120          # 2분
+      slowProcessingThresholdMs: 3000
+
+  kafka:
+    topics:
+      transfer-events: transfer-transaction-events
+
+management:
+  tracing:
+    enabled: false
