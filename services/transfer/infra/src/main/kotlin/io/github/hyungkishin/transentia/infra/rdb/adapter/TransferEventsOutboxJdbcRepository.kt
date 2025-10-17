@@ -10,13 +10,12 @@ import java.sql.Timestamp
 import java.time.Instant
 
 /**
- * Outbox 패턴을 위한 송금 이벤트 저장소 구현체
- *
- * 송금 이벤트를 안정적으로 Kafka에 발행하기 위해 Outbox 패턴을 사용한다.
+ * ## 배경
+ * 송금 이벤트를 안정적으로 Kafka에 발행하기 위해 Outbox 패턴을 사용합니다.
  * 송금 트랜잭션과 같은 DB 트랜잭션 내에서 이벤트를 저장하여 원자성을 보장하고,
- * 별도의 Relay 서버가 이 테이블을 폴링하여 Kafka로 발행한다.
+ * 별도의 Relay 서버가 이 테이블을 폴링하여 Kafka로 발행합니다.
  *
- * 핵심 설계 원칙:
+ * ## 기능
  * - SKIP LOCKED로 동시성 처리하여 여러 Relay 인스턴스 운영 가능
  * - 지수 백오프로 일시적 장애 시 자동 재시도
  * - Stuck SENDING 상태 자동 복구로 서버 재시작 시에도 안정성 보장
@@ -36,8 +35,8 @@ class TransferEventsOutboxJdbcRepository(
      * @param row 저장할 송금 이벤트 정보
      */
     override fun save(row: TransferEvent, now: Instant) {
-        val timestamp = Timestamp.from(now)  // Instant → Timestamp 변환
-        
+        val timestamp = Timestamp.from(now)
+
         val sql = """
             INSERT INTO transfer_events(
               event_id, event_version, aggregate_type, aggregate_id, event_type,
@@ -56,33 +55,37 @@ class TransferEventsOutboxJdbcRepository(
                 "eventType" to row.eventType,
                 "payload" to row.payload,
                 "headers" to row.headers,
-                "now" to timestamp  // Timestamp 사용
+                "now" to timestamp
             )
         )
     }
 
     /**
-     * 처리할 이벤트들을 배치로 조회하고 SENDING 상태로 변경한다.
+     * 처리할 이벤트들을 배치로 조회하고 SENDING 상태로 변경합니다.
      *
-     * 여러 Relay 인스턴스가 동시에 실행되어도 안전하도록 SKIP LOCKED를 사용한다.
-     * Stuck SENDING 상태(10분 이상 진행 중)인 이벤트도 자동으로 복구하여 처리한다.
-     * 우선순위는 PENDING > SENDING(Stuck) > FAILED 순으로 처리한다.
+     * 여러 스레드나 프로세스가 동시에 실행되어도 안전하도록 SKIP LOCKED를 사용합니다.
      *
-     * 처리 흐름:
-     * 1. 처리 가능한 이벤트 목록을 조회하고 락을 획득한다
-     * 2. 해당 이벤트들을 SENDING 상태로 변경하고 attempt_count를 증가시킨다
-     * 3. Stuck SENDING의 경우 attempt_count는 유지한다
+     * Stuck SENDING 상태(stuckThresholdSeconds 이상 진행 중)인 이벤트도 자동으로 복구하여 처리하며,
+     * 우선순위는 PENDING > SENDING(Stuck) > FAILED 순으로 처리합니다.
+     *
+     * 처리 흐름은 다음과 같습니다.
+     * 1. 처리 가능한 이벤트 목록을 조회하고 락을 획득
+     * 2. 해당 이벤트들을 SENDING 상태로 변경하고 attempt_count (재시도 횟수) 를 증가
+     * 3. Stuck SENDING의 경우 attempt_count는 유지
      *
      * @param limit 한 번에 처리할 최대 이벤트 수
+     * @param now 기준 시간
+     * @param stuckThresholdSeconds Stuck SENDING 판단 기준 시간 (초)
      * @return 처리할 이벤트 목록
      */
     override fun claimBatch(
         limit: Int,
-        now: Instant
+        now: Instant,
+        stuckThresholdSeconds: Long
     ): List<ClaimedRow> {
-        val stuckThreshold = Timestamp.from(now.minusSeconds(600))  // 10분 전
+        val stuckThreshold = Timestamp.from(now.minusSeconds(stuckThresholdSeconds))
         val currentTime = Timestamp.from(now)
-        
+
         val sql = """
           WITH grabbed AS (
             SELECT event_id
@@ -117,21 +120,21 @@ class TransferEventsOutboxJdbcRepository(
         """.trimIndent()
 
         return jdbc.query(
-            sql, 
+            sql,
             mapOf(
                 "limit" to limit,
                 "now" to currentTime,
                 "stuckThreshold" to stuckThreshold
-            ), 
+            ),
             claimedRowMapper
         )
     }
 
     /**
-     * Kafka 발행에 성공한 이벤트들을 PUBLISHED 상태로 변경한다.
+     * Kafka 발행에 성공한 이벤트들을 PUBLISHED 상태로 변경합니다.
      *
-     * 이벤트 발행 이력을 추적하기 위해 삭제하지 않고 상태만 변경한다.
-     * FDS 분석이나 트러블슈팅 시 발행 이력을 확인할 수 있다.
+     * 이벤트 발행 이력을 추적하기 위해 삭제하지 않고 상태만 변경하며,
+     * FDS 분석이나 트러블슈팅 시 발행 이력을 확인할 수 있습니다.
      *
      * @param ids Kafka 발행에 성공한 이벤트 ID 목록
      */
@@ -140,7 +143,7 @@ class TransferEventsOutboxJdbcRepository(
         now: Instant
     ) {
         if (ids.isEmpty()) return
-        
+
         val timestamp = Timestamp.from(now)
 
         val sql = """
@@ -151,94 +154,11 @@ class TransferEventsOutboxJdbcRepository(
             WHERE event_id IN (:ids)
         """.trimIndent()
 
-        jdbc.update(sql, mapOf(
-            "ids" to ids,
-            "now" to timestamp
-        ))
-    }
-
-    /**
-     * 파티션 기반으로 이벤트 배치를 조회하고 SENDING 상태로 변경한다.
-     *
-     * MOD(event_id, totalPartitions) = partition 조건으로 각 인스턴스가
-     * 서로 다른 이벤트를 처리하도록 분산한다. 이를 통해:
-     * - 락 경합 감소 (각 인스턴스가 다른 행 처리)
-     * - 균등한 부하 분산
-     * - 처리량 향상
-     *
-     * SKIP LOCKED는 여전히 유지하여 예외 상황에서도 안전성을 보장한다.
-     *
-     * @param partition 현재 인스턴스의 파티션 ID
-     * @param totalPartitions 전체 인스턴스 수
-     * @param limit 한 번에 처리할 최대 이벤트 수
-     * @return 처리할 이벤트 목록
-     */
-
-    // EC2 <- 떠있음...
-    // Spring batch <- 파게이트 일때. 실행한 시간기준으로 ...
-    // TODO : AWS Batch <- 쓸꺼면 ( 잘모름 확인 필요. ) ( 이벤트 브릿지 ( 크론이랑 비슷 크론처럼 쓸수 있고 이벤트를 발행하는 조건을 줄 수 있음 [확인필요])
-    // 규모 <- 선정 TPS 2000 ()
-    // 결제 <- TPS <- ??
-    // Why ? -> 200 TPS 2000TPS <- 스케줄  TODO : 스케쥴 <-
-    // 쿼츠 <- 인프라 비용 ? <- 학습곡선 + 인프라 비용 ????? 1 <-  2 <-
-    // 스프링 배치 ? <- 학습곡선 올라가고 + 파게이트 +
-
-    // 결론: 올리면. 배보다 배꼽이 더 크다 ....
-
-    // 최종 결정 :
-    override fun claimBatchByPartition(
-        partition: Int,
-        totalPartitions: Int,
-        limit: Int,
-        now: Instant
-    ): List<ClaimedRow> {
-        val stuckThreshold = Timestamp.from(now.minusSeconds(600))  // 10분 전
-        val currentTime = Timestamp.from(now)
-        
-        val sql = """
-          WITH grabbed AS (
-            SELECT event_id
-            FROM transfer_events
-            WHERE (
-              status IN ('PENDING', 'FAILED')
-              OR (status = 'SENDING' AND updated_at < :stuckThreshold)
+        jdbc.update(
+            sql, mapOf(
+                "ids" to ids,
+                "now" to timestamp
             )
-              AND next_retry_at <= :now
-              AND attempt_count < 5
-              AND MOD(event_id, :totalPartitions) = :partition
-            ORDER BY 
-              CASE 
-                WHEN status = 'PENDING' THEN 0 
-                WHEN status = 'SENDING' THEN 1
-                ELSE 2 
-              END,
-              created_at
-            FOR UPDATE SKIP LOCKED
-            LIMIT :limit
-          )
-          UPDATE transfer_events t
-             SET status = 'SENDING',
-                 attempt_count = CASE 
-                   WHEN t.status = 'SENDING' THEN t.attempt_count
-                   ELSE t.attempt_count + 1 
-                 END,
-                 updated_at = :now
-            FROM grabbed g
-           WHERE t.event_id = g.event_id
-          RETURNING t.event_id, t.aggregate_id, t.payload::text AS payload, 
-                   t.headers::text AS headers, t.attempt_count
-        """.trimIndent()
-
-        return jdbc.query(
-            sql, 
-            mapOf(
-                "limit" to limit,
-                "partition" to partition,
-                "totalPartitions" to totalPartitions,
-                "now" to currentTime,
-                "stuckThreshold" to stuckThreshold
-            ), 
-            claimedRowMapper
         )
     }
 
@@ -267,7 +187,7 @@ class TransferEventsOutboxJdbcRepository(
     ) {
         val currentTime = Timestamp.from(now)
         val nextRetry = Timestamp.from(now.plusMillis(backoffMillis))
-        
+
         val sql = """
         UPDATE transfer_events
         SET status = CASE 
@@ -304,4 +224,5 @@ class TransferEventsOutboxJdbcRepository(
             attemptCount = rs.getInt("attempt_count")
         )
     }
+
 }

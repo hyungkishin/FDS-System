@@ -16,55 +16,47 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Outbox 패턴 Relay 서버 (파티셔닝 지원)
+ * Outbox 패턴 Relay 서버 (멀티 스레드 기반)
  *
  * ## 역할
  * Outbox 테이블에 저장된 이벤트를 주기적으로 폴링하여 Kafka로 전송한다.
  * 이를 통해 송금 트랜잭션과 이벤트 발행의 원자성을 보장한다.
  *
- * ## 핵심 설계
- * 1. **파티셔닝**
- *    - 여러 인스턴스가 동시 실행 시 각자 다른 이벤트 처리
- *    - MOD(event_id, totalInstances) = instanceId
- *    - 락 경합 감소, 처리량 증가
+ * ### 1. **단일 인스턴스 + 멀티 스레드**
+ * - MOD 파티셔닝 제거 (인스턴스 확장 시 복잡도 제거)
+ * - 멀티 스레드로 처리량 확보
+ * - 단순하고 안정적인 아키텍처
  *
- * 2. **백오프 전략**
- *    - 실패 시 지수 백오프로 재시도 간격 증가
- *    - 일시적 장애(Kafka 다운 등)에 효과적 대응
- *    - 무의미한 재시도 방지로 리소스 절약
+ * ### 2. **동시성 제어**
+ * - **DB 레벨**: SKIP LOCKED (행 단위 락)
+ * - **애플리케이션 레벨**: @Scheduled fixedDelay (순차 실행)
+ * - **처리 레벨**: ExecutorService (병렬 Kafka 전송)
  *
- * 3. **자원 효율**
- *    - 연속으로 빈 배치 발생 시 대기 시간 증가
- *    - 이벤트 없을 때 DB 부하 감소
+ * ### 3. **장애 복구**
+ * - **Stuck SENDING**: 2분 후 자동 재시도
+ * - **백오프 전략**: 지수 백오프로 일시적 장애 대응
+ * - **재시도 로직**: markAsPublished 실패 시 3회 재시도
  *
- * ## 처리 흐름
- * ```
- * @Scheduled 실행 (1초마다)
- *   ↓
- * claimBatchByPartition (자기 파티션만 조회)
- *   ↓
- * EventBatchProcessor (병렬 처리)
- *   ↓
- * Kafka 전송
- *   ↓
- * 성공: markAsPublished
- * 실패: markFailedWithBackoff (재시도 예약)
- * ```
- *
- * ## 인스턴스 확장
+ * ### 4. **성능 목표**
  * ```
  * 평시 (200 TPS):
- *   - 3대 운영
- *   - 각 67 TPS 처리
- *   - 부하: 14%
+ *   - 단일 인스턴스
+ *   - 멀티 스레드 (8개)
+ *   - 배치 크기: 500
+ *   - 처리 시간: ~50ms
+ *   - 여유도: 충분
  *
  * 피크 (2000 TPS):
- *   - 7대로 자동 확장 (Auto Scaling)
- *   - 각 286 TPS 처리
- *   - 부하: 61%
+ *   - threadPoolSize 증가 (8 -> 16)
+ *   - 또는 batchSize 증가 (500 -> 1000)
  * ```
  *
- * @see EventBatchProcessor 실제 Kafka 전송 처리
+ * ## 엣지케이스 대응
+ * 1. **Kafka 성공 + DB 실패**: Stuck SENDING 복구 (2분 후)
+ * 2. **서버 다운**: Stuck SENDING 복구 (2분 후)
+ * 3. TODO: **중복 발행**: FDS 컨슈머에서 멱등성 보장 (event_id 체크 할것.)
+ *
+ * @see EventBatchProcessor 멀티 스레드 Kafka 전송
  * @see RetryPolicyHandler 백오프 정책 계산
  */
 @Component
@@ -110,21 +102,15 @@ class TransferOutboxRelay(
      * Outbox 이벤트를 주기적으로 처리하는 메인 루프
      *
      * ## 실행 주기
-     * - fixedDelay: 이전 실행 완료 후 1초 대기 (1000ms)
-     * - initialDelay: 애플리케이션 시작 후 5초 대기 (5000ms)
-     *
-     * ## 파티셔닝 동작
-     * ```
-     * Instance 0: MOD(event_id, 3) = 0 → 1, 4, 7, 10, 13...
-     * Instance 1: MOD(event_id, 3) = 1 → 2, 5, 8, 11, 14...
-     * Instance 2: MOD(event_id, 3) = 2 → 3, 6, 9, 12, 15...
-     * ```
+     * - fixedDelay: 이전 실행 완료 후 1초 대기
+     * - initialDelay: 애플리케이션 시작 후 5초 대기
+     * - 순차 실행 보장 (오버랩 없음)
      *
      * ## 처리 단계
-     * 1. 파티션 기반 배치 조회 (500건)
+     * 1. 배치 조회 (SKIP LOCKED, 500건)
      * 2. 빈 배치면 백오프 처리 후 종료
-     * 3. EventBatchProcessor로 병렬 처리
-     * 4. 성공/실패 결과 처리
+     * 3. EventBatchProcessor로 멀티 스레드 병렬 처리
+     * 4. 성공/실패 결과 처리 (재시도 로직 포함)
      * 5. 성능 모니터링
      *
      * ## 예외 처리
@@ -133,25 +119,18 @@ class TransferOutboxRelay(
      */
     @Scheduled(
         fixedDelayString = "\${app.outbox.relay.fixedDelayMs:1000}",
-        initialDelayString = "\${app.outbox.relay.initialDelayMs:2000}"
+        initialDelayString = "\${app.outbox.relay.initialDelayMs:5000}"
     )
     fun run() {
-        /**
-         * TODO : thread pool 을 만들어서 mod 연산에 필요한 대역을 가져도 될것같다.
-         * - 성능치를 끌어올리려 하면, multiThread 를 띄우면 될 것 같다.
-         * - 1. producer 성능 up 을 위해 멀티 instance 를 하였는데, ThreadPool 로 풀어 내는 방식 ( Todo-1 )
-         * - 2. Spring Batch 로 구현 ( Todo-2 )
-         */
         try {
             val startTime = System.currentTimeMillis()
-            val now = Instant.now()  // 실행 시점 시간 (일관성 보장)
+            val now = Instant.now()
 
-            // 파티션 기반 배치 조회
-            val batch = outboxRepository.claimBatchByPartition(
-                partition = config.instanceId,
-                totalPartitions = config.totalInstances,
-                limit = config.batchSize, // 조회 사이즈
-                now = now
+            // 배치 조회
+            val batch = outboxRepository.claimBatch(
+                limit = config.batchSize,
+                now = now,
+                stuckThresholdSeconds = config.stuckThresholdSeconds
             )
 
             // 빈 배치 처리
@@ -163,15 +142,9 @@ class TransferOutboxRelay(
             // 카운터 리셋 (이벤트 발견)
             consecutiveEmptyCount = 0
 
-            log.debug(
-                "[Instance-{}] Processing {} events (partition {}/{})",
-                config.instanceId,
-                batch.size,
-                config.instanceId,
-                config.totalInstances
-            )
+            log.debug("Processing {} events", batch.size)
 
-            // 배치 처리 (병렬 Kafka 전송)
+            // 배치 처리 (멀티 스레드 병렬 Kafka 전송)
             val result = eventBatchProcessor.processBatch(
                 batch = batch,
                 topicName = topicName,
@@ -180,31 +153,34 @@ class TransferOutboxRelay(
 
             val processingTime = System.currentTimeMillis() - startTime
 
-            // 성공 이벤트 처리
+            // 성공 이벤트 처리 (재시도 로직 포함)
             if (result.successIds.isNotEmpty()) {
-                outboxRepository.markAsPublished(result.successIds, now)
-                _processedEventCount.addAndGet(result.successIds.size)  // atomic 증가
+                retryOperation(maxAttempts = 3, operationName = "markAsPublished") {
+                    outboxRepository.markAsPublished(result.successIds, now)
+                }
+                
+                _processedEventCount.addAndGet(result.successIds.size)
+                
                 log.info(
-                    "[Instance-{}] Published {} events ({}% success) in {}ms",
-                    config.instanceId,
+                    "Published {} events ({}% success) in {}ms",
                     result.successIds.size,
                     "%.1f".format(result.successRate * 100),
                     processingTime
                 )
             }
 
-            /**
-             * end
-             */
-
-            // 실패 이벤트 처리 (백오프 적용)
-            handleFailedEvents(result.failedEvents, now)
+            // 실패 이벤트 처리 (백오프 적용, 재시도 로직 포함)
+            if (result.failedEvents.isNotEmpty()) {
+                retryOperation(maxAttempts = 3, operationName = "handleFailedEvents") {
+                    handleFailedEvents(result.failedEvents, now)
+                }
+            }
 
             // 성능 모니터링
             monitorPerformance(processingTime, result.totalProcessed)
 
         } catch (e: Exception) {
-            log.error("[Instance-{}] Relay batch processing failed", config.instanceId, e)
+            log.error("Relay batch processing failed", e)
         }
     }
 
@@ -223,12 +199,12 @@ class TransferOutboxRelay(
      * ## 효과
      * ```
      * Before (이벤트 없을 때):
-     *   - 초당 3회 DB 조회 (3개 인스턴스)
-     *   - 시간당 10,800회 조회
+     *   - 초당 1회 DB 조회
+     *   - 시간당 3,600회 조회
      *
      * After (백오프 적용):
-     *   - 초당 1회 DB 조회 (3초마다)
-     *   - 시간당 3,600회 조회
+     *   - 3초마다 1회 DB 조회
+     *   - 시간당 1,200회 조회
      *   - 67% 감소!
      * ```
      *
@@ -240,11 +216,7 @@ class TransferOutboxRelay(
         consecutiveEmptyCount++
         
         if (consecutiveEmptyCount > 3) {
-            log.debug(
-                "[Instance-{}] No events for {} cycles, sleeping 3s...",
-                config.instanceId,
-                consecutiveEmptyCount
-            )
+            log.debug("No events for {} cycles, sleeping 3s...", consecutiveEmptyCount)
             Thread.sleep(3000)
         }
     }
@@ -265,11 +237,11 @@ class TransferOutboxRelay(
      *   - 리소스 낭비
      *
      * 백오프 적용:
-     *   - 1차: 2초 후 재시도
-     *   - 2차: 4초 후 재시도
-     *   - 3차: 8초 후 재시도
-     *   - 4차: 16초 후 재시도
-     *   - 5차: 32초 후 재시도
+     *   - 1차: 5초 후 재시도
+     *   - 2차: 10초 후 재시도
+     *   - 3차: 20초 후 재시도
+     *   - 4차: 40초 후 재시도
+     *   - 5차: 80초 후 재시도
      *   - 총 5회만 시도
      *   - 효율적!
      * ```
@@ -278,11 +250,11 @@ class TransferOutboxRelay(
      * ```
      * attempt_count | backoff | next_retry_at
      * --------------|---------|------------------
-     * 1             | 2초     | now + 2초
-     * 2             | 4초     | now + 4초
-     * 3             | 8초     | now + 8초
-     * 4             | 16초    | now + 16초
-     * 5             | 32초    | now + 32초
+     * 1             | 5초     | now + 5초
+     * 2             | 10초    | now + 10초
+     * 3             | 20초    | now + 20초
+     * 4             | 40초    | now + 40초
+     * 5             | 80초    | now + 80초
      * 6+            | 포기    | DEAD_LETTER 상태
      * ```
      *
@@ -298,7 +270,7 @@ class TransferOutboxRelay(
     private fun handleFailedEvents(failedEvents: List<ProcessingResult.FailedEvent>, now: Instant) {
         if (failedEvents.isEmpty()) return
 
-        log.warn("[Instance-{}] Failed to publish {} events", config.instanceId, failedEvents.size)
+        log.warn("Failed to publish {} events", failedEvents.size)
 
         failedEvents.forEach { failed ->
             // 백오프 시간 계산 (지수 + Jitter)
@@ -313,8 +285,7 @@ class TransferOutboxRelay(
             )
             
             log.debug(
-                "[Instance-{}] Event {} will retry in {}ms (attempt {})",
-                config.instanceId,
+                "Event {} will retry in {}ms (attempt {})",
                 failed.eventId,
                 backoffMillis,
                 failed.attemptCount + 1
@@ -355,13 +326,74 @@ class TransferOutboxRelay(
     private fun monitorPerformance(processingTime: Long, totalProcessed: Int) {
         if (processingTime > config.slowProcessingThresholdMs) {
             log.warn(
-                "[Instance-{}] Slow batch processing: {}ms for {} events (threshold: {}ms)",
-                config.instanceId,
+                "Slow batch processing: {}ms for {} events (threshold: {}ms)",
                 processingTime,
                 totalProcessed,
                 config.slowProcessingThresholdMs
             )
         }
+    }
+
+    /**
+     * DB 작업에 대한 재시도 로직
+     *
+     * ## 배경
+     * markAsPublished나 handleFailedEvents 실패 시:
+     * - Kafka는 이미 전송됨
+     * - DB만 업데이트 실패
+     * - Stuck SENDING 상태로 방치
+     * - 2분 후 중복 발행
+     *
+     * ## 대응
+     * DB 작업 실패 시 즉시 재시도 (3회)
+     * - 1차 실패: 100ms 후 재시도
+     * - 2차 실패: 200ms 후 재시도
+     * - 3차 실패: 예외 발생 (Stuck SENDING 복구로 처리)
+     *
+     * ## 결과
+     * 대부분의 일시적 DB 장애 자동 복구 이후, 중복 발행 감소
+     *
+     * @param maxAttempts 최대 재시도 횟수
+     * @param operationName 작업 이름 (로그용)
+     * @param operation 실행할 작업
+     * @throws Exception 모든 재시도 실패 시
+     */
+    private fun <T> retryOperation(
+        maxAttempts: Int = 3,
+        operationName: String,
+        operation: () -> T
+    ): T {
+        var lastException: Exception? = null
+        
+        repeat(maxAttempts) { attempt ->
+            try {
+                return operation()
+            } catch (e: Exception) {
+                lastException = e
+                
+                if (attempt < maxAttempts - 1) {
+                    val delayMs = 100L * (attempt + 1)  // 100ms, 200ms
+                    log.warn(
+                        "{} failed (attempt {}/{}): {}. Retrying in {}ms...",
+                        operationName,
+                        attempt + 1,
+                        maxAttempts,
+                        e.message,
+                        delayMs
+                    )
+                    Thread.sleep(delayMs)
+                } else {
+                    log.error(
+                        "{} failed after {} attempts. Will be recovered by Stuck SENDING mechanism.",
+                        operationName,
+                        maxAttempts,
+                        e
+                    )
+                }
+            }
+        }
+        
+        throw lastException!!
     }
 
     /**
@@ -372,7 +404,7 @@ class TransferOutboxRelay(
      * 2. 진행 중인 작업 완료 대기 (30초)
      * 3. 타임아웃 시 강제 종료 (shutdownNow)
      *
-     * ## 필요한 이유 ?
+     * ## 필요한 이유
      * ```
      * Graceful Shutdown 없이:
      *   - 이벤트 처리 중 종료
@@ -385,36 +417,30 @@ class TransferOutboxRelay(
      *   - 안전한 종료
      * ```
      *
-     * ## 타임아웃 에 대해서
+     * ## 타임아웃
      * - 30초: 정상 종료 대기 시간
      * - 1초: 강제 종료 후 재확인 시간
      */
     @PreDestroy
     fun cleanup() {
-        log.info("[Instance-{}] Shutting down outbox relay executor service", config.instanceId)
+        log.info("Shutting down outbox relay executor service")
         executorService.shutdown()
 
         try {
             // 30초 동안 정상 종료 대기
             if (!executorService.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
-                log.warn(
-                    "[Instance-{}] Executor did not terminate gracefully, forcing shutdown",
-                    config.instanceId
-                )
+                log.warn("Executor did not terminate gracefully, forcing shutdown")
                 executorService.shutdownNow()
 
                 // 강제 종료 후 1초 대기
                 if (!executorService.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS)) {
-                    log.error(
-                        "[Instance-{}] Executor did not terminate after forced shutdown",
-                        config.instanceId
-                    )
+                    log.error("Executor did not terminate after forced shutdown")
                 }
             }
             
-            log.info("[Instance-{}] Executor service terminated successfully", config.instanceId)
+            log.info("Executor service terminated successfully")
         } catch (e: InterruptedException) {
-            log.warn("[Instance-{}] Interrupted while waiting for executor termination", config.instanceId)
+            log.warn("Interrupted while waiting for executor termination")
             executorService.shutdownNow()
             Thread.currentThread().interrupt()
         }

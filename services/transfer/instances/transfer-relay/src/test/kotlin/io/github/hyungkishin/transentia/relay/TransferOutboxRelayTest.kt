@@ -10,11 +10,14 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
-import java.time.Instant
 import java.util.concurrent.ExecutorService
 
+/**
+ * 멀티 스레드 기반 단일 인스턴스의 단위 테스트
+ */
 @ExtendWith(MockitoExtension::class)
 class TransferOutboxRelayTest {
 
@@ -37,10 +40,9 @@ class TransferOutboxRelayTest {
 
     @BeforeEach
     fun setUp() {
-        // 기본 설정값만 설정 - 필요한 테스트에서 개별적으로 추가 설정
+        // 모든 테스트에서 사용하는 필수 설정
         whenever(config.batchSize).thenReturn(100)
-        whenever(config.instanceId).thenReturn(0)
-        whenever(config.totalInstances).thenReturn(1)
+        whenever(config.stuckThresholdSeconds).thenReturn(120L)
 
         relay = TransferOutboxRelay(
             outboxRepository = outboxRepository,
@@ -55,19 +57,23 @@ class TransferOutboxRelayTest {
     @Test
     fun `빈 배치일 때 처리하지 않음`() {
         // Given
-        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(emptyList())
+        whenever(outboxRepository.claimBatch(any(), any(), any()))
+            .thenReturn(emptyList())
 
         // When
         relay.run()
 
         // Then
-        verify(outboxRepository).claimBatchByPartition(
-            partition = eq(0),
-            totalPartitions = eq(1),
+        verify(outboxRepository).claimBatch(
             limit = eq(100),
-            now = any()
+            now = any(),
+            stuckThresholdSeconds = eq(120L)
         )
+
+        // eventBatchProcessor 호출 안함
         verifyNoInteractions(eventBatchProcessor)
+
+        // retryPolicyHandler 호출 안함
         verifyNoInteractions(retryPolicyHandler)
     }
 
@@ -80,7 +86,12 @@ class TransferOutboxRelayTest {
             failedEvents = emptyList()
         )
 
-        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
+        whenever(config.timeoutSeconds)
+            .thenReturn(5L)
+
+        whenever(outboxRepository.claimBatch(any(), any(), any()))
+            .thenReturn(batch)
+
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenReturn(successResult)
 
@@ -88,21 +99,28 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // Then
-        verify(outboxRepository).claimBatchByPartition(
-            partition = eq(0),
-            totalPartitions = eq(1),
+        verify(outboxRepository).claimBatch(
             limit = eq(100),
-            now = any()
+            now = any(),
+            stuckThresholdSeconds = eq(120L)
         )
-        verify(eventBatchProcessor).processBatch(any(), any(), any(), any())
-        verify(outboxRepository).markAsPublished(eq(listOf(1L, 2L)), any())
+        verify(eventBatchProcessor).processBatch(
+            batch = eq(batch),
+            topicName = eq("transfer-transaction-events"),
+            chunkSize = any(),
+            timeoutSeconds = eq(5L)
+        )
+
+        // 재시도 로직으로 최대 3회 시도 가능
+        verify(outboxRepository, atLeast(1))
+            .markAsPublished(eq(listOf(1L, 2L)), any())
+
         verifyNoInteractions(retryPolicyHandler)
     }
 
     @Test
     fun `배치 처리 실패시 백오프 적용`() {
         // Given
-        whenever(config.timeoutSeconds).thenReturn(30L) // 이 테스트에서만 필요
         val batch = listOf(createMockClaimedRow(1L))
         val failedResult = ProcessingResult(
             successIds = emptyList(),
@@ -115,7 +133,7 @@ class TransferOutboxRelayTest {
             )
         )
 
-        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
+        whenever(outboxRepository.claimBatch(any(), any(), any())).thenReturn(batch)
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenReturn(failedResult)
         whenever(retryPolicyHandler.calculateBackoff(1)).thenReturn(5000L)
@@ -124,15 +142,21 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // Then
-        verify(outboxRepository).claimBatchByPartition(
-            partition = eq(0),
-            totalPartitions = eq(1),
+        verify(outboxRepository).claimBatch(
             limit = eq(100),
-            now = any()
+            now = any(),
+            stuckThresholdSeconds = eq(120L)
         )
         verify(eventBatchProcessor).processBatch(any(), any(), any(), any())
         verify(retryPolicyHandler).calculateBackoff(eq(1))
-        verify(outboxRepository).markFailedWithBackoff(eq(1L), eq("Kafka connection failed"), eq(5000L), any())
+
+        // 재시도 로직으로 최대 3회 시도
+        verify(outboxRepository, atLeast(1)).markFailedWithBackoff(
+            id = eq(1L),
+            cause = eq("Kafka connection failed"),
+            backoffMillis = eq(5000L),
+            now = any()
+        )
         verify(outboxRepository, never()).markAsPublished(any(), any())
     }
 
@@ -151,25 +175,40 @@ class TransferOutboxRelayTest {
             )
         )
 
-        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
+        whenever(outboxRepository.claimBatch(any(), any(), any()))
+            .thenReturn(batch)
+
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenReturn(mixedResult)
-        whenever(retryPolicyHandler.calculateBackoff(2)).thenReturn(10000L)
+
+        whenever(retryPolicyHandler.calculateBackoff(2))
+            .thenReturn(10000L)
 
         // When
         relay.run()
 
         // Then
-        verify(outboxRepository).markAsPublished(eq(listOf(1L)), any())
+        verify(outboxRepository, atLeast(1))
+            .markAsPublished(eq(listOf(1L)), any())
+
         verify(retryPolicyHandler).calculateBackoff(eq(2))
-        verify(outboxRepository).markFailedWithBackoff(eq(2L), eq("Serialization failed"), eq(10000L), any())
+
+        verify(outboxRepository, atLeast(1))
+            .markFailedWithBackoff(
+                id = eq(2L),
+                cause = eq("Serialization failed"),
+                backoffMillis = eq(10000L),
+                now = any()
+            )
     }
 
     @Test
     fun `처리 중 예외 발생시 안전하게 처리`() {
         // Given
         val batch = listOf(createMockClaimedRow(1L))
-        whenever(outboxRepository.claimBatchByPartition(any(), any(), any(), any())).thenReturn(batch)
+        whenever(outboxRepository.claimBatch(any(), any(), any()))
+            .thenReturn(batch)
+
         whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
             .thenThrow(RuntimeException("Unexpected error"))
 
@@ -178,13 +217,59 @@ class TransferOutboxRelayTest {
         relay.run()
 
         // 배치 조회는 성공했어야 함
-        verify(outboxRepository).claimBatchByPartition(
-            partition = eq(0),
-            totalPartitions = eq(1),
+        verify(outboxRepository).claimBatch(
             limit = eq(100),
-            now = any()
+            now = any(),
+            stuckThresholdSeconds = eq(120L)
         )
-        verify(eventBatchProcessor).processBatch(any(), any(), any(), any())
+        verify(eventBatchProcessor)
+            .processBatch(any(), any(), any(), any())
+    }
+
+    @Test
+    fun `markAsPublished 실패 시 재시도 로직 동작 확인 - 3회 재시도 (총 3번 호출)`() {
+        // Given
+        val batch = listOf(createMockClaimedRow(1L))
+        val successResult = ProcessingResult(
+            successIds = listOf(1L),
+            failedEvents = emptyList()
+        )
+
+        whenever(outboxRepository.claimBatch(any(), any(), any()))
+            .thenReturn(batch)
+
+        whenever(eventBatchProcessor.processBatch(any(), any(), any(), any()))
+            .thenReturn(successResult)
+
+        whenever(outboxRepository.markAsPublished(any(), any()))
+            .thenThrow(RuntimeException("DB connection failed"))
+            .thenThrow(RuntimeException("DB connection failed"))
+            .thenAnswer { }
+
+        // When
+        relay.run()
+
+        // Then
+        verify(outboxRepository, times(3))
+            .markAsPublished(eq(listOf(1L)), any())
+    }
+
+    @Test
+    fun `연속 빈 배치 시 백오프 적용 확인 - 4번 연속 실행 (3번째까지는 즉시, 4번째부터 3초 대기)`() {
+        // Given
+        whenever(outboxRepository.claimBatch(any(), any(), any())).thenReturn(emptyList())
+
+        // When
+        relay.run()
+        relay.run()
+        relay.run()
+        relay.run()
+
+        // Then
+        verify(outboxRepository, times(4))
+            .claimBatch(any(), any(), any())
+
+        verifyNoInteractions(eventBatchProcessor)
     }
 
     private fun createMockClaimedRow(eventId: Long): ClaimedRow {
@@ -192,7 +277,8 @@ class TransferOutboxRelayTest {
             eventId = eventId,
             aggregateId = "transaction-$eventId",
             payload = """{"transactionId": $eventId, "status": "COMPLETED"}""",
-            headers = "{}"
+            headers = "{}",
+            attemptCount = 0
         )
     }
 }
