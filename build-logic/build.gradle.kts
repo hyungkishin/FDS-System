@@ -44,6 +44,18 @@ gradlePlugin {
             id = "transentia.code-coverage"
             implementationClass = "transentia.CodeCoverageConventionPlugin"
         }
+
+        // Kafka Config 용 플러그인
+        create("kafkaConfigConventionPlugin") {
+            id = "transentia.kafka-config-convention"
+            implementationClass = "transentia.KafkaConfigConventionPlugin"
+        }
+
+        // Consumer/Producer용 Kafka 플러그인
+        create("kafkaConventionPlugin") {
+            id = "transentia.kafka-convention"
+            implementationClass = "transentia.KafkaConventionPlugin"
+        }
     }
 }
 

@@ -5,7 +5,11 @@ plugins {
     kotlin("plugin.spring") version "1.9.25" apply false
     kotlin("plugin.jpa") version "1.9.25" apply false
     kotlin("plugin.allopen") version "1.9.25" apply false
+
+    // build-logic 내에 root convention apply
     id("transentia.root-conventions")
+
+    id("com.github.davidmc24.gradle.plugin.avro") version "1.9.1" apply false
 }
 
 group = "io.github.hyungkishin"

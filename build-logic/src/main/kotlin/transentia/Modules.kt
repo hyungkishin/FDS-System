@@ -6,7 +6,7 @@ object Modules {
     const val TRANSFER_RELAY = "transfer-relay"
     const val TRANSFER_PUBLISHER = "transfer-publisher"
     const val TRANSFER_CONSUMER = "transfer-consumer"
-    const val FDS_CONSUMER = "fds-consumer"
+    const val FDS_CONSUMER = "fds-api"
 
     // 스프링 모듈
     const val TRANSFER_APPLICATION = "transfer-application"

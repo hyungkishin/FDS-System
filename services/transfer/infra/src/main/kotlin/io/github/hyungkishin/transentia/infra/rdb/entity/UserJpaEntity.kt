@@ -1,9 +1,9 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.enums.UserRole
-import io.github.hyungkishin.transentia.domain.enums.UserStatus
-import io.github.hyungkishin.transentia.domain.model.user.*
+import io.github.hyungkishin.transentia.container.enums.UserRole
+import io.github.hyungkishin.transentia.container.enums.UserStatus
+import io.github.hyungkishin.transentia.container.model.user.*
 import jakarta.persistence.*
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
@@ -81,7 +81,7 @@ class UserJpaEntity(
                 email = domain.email.value,
                 status = domain.status,
                 role = domain.role,
-                account = accountEntity,  // account 설정
+                account = accountEntity,
                 isTransferLocked = domain.isTransferLocked,
                 transferLockReason = domain.transferLockReason?.value,
                 dailyTransferLimit = domain.dailyTransferLimit.value,
@@ -89,7 +89,6 @@ class UserJpaEntity(
                 updatedAt = domain.updatedAt
             )
 
-            // 양방향 연관관계 설정
             accountEntity.user = userEntity
 
             return userEntity

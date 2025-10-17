@@ -1,6 +1,6 @@
 package io.github.hyungkishin.transentia.application.required
 
-import io.github.hyungkishin.transentia.domain.model.transaction.Transaction
+import io.github.hyungkishin.transentia.container.model.transaction.Transaction
 
 interface TransactionRepository {
     fun save(transaction: Transaction): Transaction

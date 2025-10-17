@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm")
+    id("transentia.kotlin-library")
 }
 
 java {

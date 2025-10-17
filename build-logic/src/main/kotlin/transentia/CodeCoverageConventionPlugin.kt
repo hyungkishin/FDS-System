@@ -8,6 +8,7 @@ import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
 class CodeCoverageConventionPlugin : Plugin<Project> {
+
     override fun apply(target: Project) = with(target) {
         // jacoco 플러그인 적용
         pluginManager.apply("jacoco")

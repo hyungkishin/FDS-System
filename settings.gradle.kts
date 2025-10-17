@@ -15,8 +15,10 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         mavenCentral()
+        maven("https://packages.confluent.io/maven/")
         google()
     }
+
 }
 
 rootProject.name = "transentia"
@@ -42,8 +44,8 @@ project(":transfer-api").projectDir = file("services/transfer/instances/api")
 include("transfer-relay")
 project(":transfer-relay").projectDir = file("services/transfer/instances/transfer-relay")
 
-include("fds-consumer")
-project(":fds-consumer").projectDir = file("services/fds/instances/consumer")
+include("fds-api")
+project(":fds-api").projectDir = file("services/fds/instances/api")
 
 include("common-application")
 project(":common-application").projectDir = file("common/common-application")
@@ -51,14 +53,14 @@ project(":common-application").projectDir = file("common/common-application")
 include("common-domain")
 project(":common-domain").projectDir = file("common/common-domain")
 
-//include("infrastructure-kafka")
-//project(":infrastructure-kafka").projectDir = file("infrastructure/kafka")
-//
-//include("kafka-config")
-//project(":kafka-config").projectDir = file("infrastructure/kafka/kafka-config")
-//
-//include("kafka-producer")
-//project(":kafka-producer").projectDir = file("infrastructure/kafka/kafka-producer")
-//
-//include("kafka-consumer")
-//project(":kafka-consumer").projectDir = file("infrastructure/kafka/kafka-consumer")
+include("kafka-config")
+project(":kafka-config").projectDir = file("infrastructure/kafka/kafka-config")
+
+include("kafka-producer")
+project(":kafka-producer").projectDir = file("infrastructure/kafka/kafka-producer")
+
+include("kafka-consumer")
+project(":kafka-consumer").projectDir = file("infrastructure/kafka/kafka-consumer")
+
+include("kafka-model")
+project(":kafka-model").projectDir = file("infrastructure/kafka/kafka-model")

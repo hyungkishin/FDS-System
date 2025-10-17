@@ -12,7 +12,7 @@ $$
 $$;
 
 -- users 테이블
-CREATE TABLE users
+CREATE TABLE IF NOT EXISTS users
 (
     id                   BIGINT PRIMARY KEY,                    -- 사용자 고유 ID (Snowflake)
     name                 TEXT        NOT NULL,                  -- 사용자 이름
@@ -27,7 +27,7 @@ CREATE TABLE users
 );
 
 -- 인덱스
-CREATE INDEX idx_users_status_locked ON users (status, is_transfer_locked);
+CREATE INDEX IF NOT EXISTS idx_users_status_locked ON users (status, is_transfer_locked);
 
 -- 코멘트
 COMMENT ON TABLE users IS '송금 시스템 사용자 정보';
@@ -54,7 +54,7 @@ $$
     END
 $$;
 
-CREATE TABLE account_balances
+CREATE TABLE IF NOT EXISTS account_balances
 (
     id             BIGINT PRIMARY KEY,                         -- ID (Snowflake)
     user_id        BIGINT         NOT NULL,                    -- 사용자 ID (1:1 관계, 현재) -- TODO : REFERENCES users (id)
@@ -68,11 +68,10 @@ CREATE TABLE account_balances
 );
 
 -- 인덱스
-CREATE UNIQUE INDEX idx_account_balances_account_number ON account_balances (account_number);
-
-
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_balances_account_number ON account_balances (account_number);
 
 -- updated_at 자동 갱신 트리거
+DROP TRIGGER IF EXISTS trg_ab_touch_updated_at ON account_balances;
 CREATE OR REPLACE FUNCTION trg_ab_touch_updated_at()
     RETURNS trigger
     LANGUAGE plpgsql AS
@@ -109,7 +108,7 @@ CREATE TABLE IF NOT EXISTS transactions
     id                BIGINT PRIMARY KEY,                             -- 트랜잭션 ID (Snowflake)
     sender_user_id    BIGINT             NOT NULL,                    -- FK: users(id)
     receiver_user_id  BIGINT             NOT NULL,                    -- FK: users(id)
-    amount            NUMERIC(20, 8)     NOT NULL CHECK (amount > 0), -- scale=8
+    amount            BIGINT             NOT NULL CHECK (amount > 0), -- scale=8
 --     currency          currency_code      NOT NULL DEFAULT 'KRW',
     status            transaction_status NOT NULL DEFAULT 'PENDING',
     received_at       TIMESTAMPTZ        NOT NULL DEFAULT now(),      -- 수신/요청 시각
@@ -179,7 +178,7 @@ $$
     END
 $$;
 
-CREATE TABLE transaction_histories
+CREATE TABLE IF NOT EXISTS transaction_histories
 (
     id             BIGINT PRIMARY KEY,                  -- 이력 자체 PK
     transaction_id BIGINT                     NOT NULL, -- TODO: 논리적 FK 로 할지 고민필요. REFERENCES transactions (id),
@@ -193,7 +192,7 @@ COMMENT ON COLUMN transaction_histories.transaction_id IS '참조 트랜잭션 I
 COMMENT ON COLUMN transaction_histories.created_at IS '생성 시각';
 
 -- 인덱스
-CREATE INDEX idx_tx_histories_txid_created
+CREATE INDEX IF NOT EXISTS idx_tx_histories_txid_created
     ON transaction_histories (transaction_id, created_at);
 
 ---
@@ -203,7 +202,7 @@ DO
 $$
     BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transfer_outbox_status') THEN
-            CREATE TYPE transfer_outbox_status AS ENUM ('PENDING','SENDING','PUBLISHED','FAILED');
+            CREATE TYPE transfer_outbox_status AS ENUM ('PENDING','SENDING','PUBLISHED','FAILED', 'DEAD_LETTER');
         END IF;
     END
 $$;
@@ -211,7 +210,7 @@ $$;
 -- Outbox 테이블
 CREATE TABLE IF NOT EXISTS transfer_events
 (
-    event_id       BIGINT PRIMARY KEY,                            -- Snowflake or UUID (멱등키)
+    event_id       BIGINT PRIMARY KEY,
     event_version  INT                    NOT NULL DEFAULT 1,
     aggregate_type VARCHAR(100)           NOT NULL,
     aggregate_id   VARCHAR(100)           NOT NULL,
@@ -219,12 +218,14 @@ CREATE TABLE IF NOT EXISTS transfer_events
     payload        JSONB                  NOT NULL,
     headers        JSONB                  NOT NULL DEFAULT '{}'::jsonb,
     created_at     TIMESTAMPTZ(6)         NOT NULL DEFAULT now(),
-    updated_at     TIMESTAMPTZ(6)         NOT NULL DEFAULT now(), -- 상태 바뀔 때마다 갱신
+    updated_at     TIMESTAMPTZ(6)         NOT NULL DEFAULT now(),
     published_at   TIMESTAMPTZ(6),
     status         transfer_outbox_status NOT NULL DEFAULT 'PENDING',
     attempt_count  INT                    NOT NULL DEFAULT 0,
     next_retry_at  TIMESTAMPTZ(6)         NOT NULL DEFAULT now(),
     last_error     TEXT,
+
+    -- 제약조건
     CONSTRAINT ck_transfer_events_payload_object CHECK (jsonb_typeof(payload) = 'object'),
     CONSTRAINT ck_transfer_events_headers_object CHECK (jsonb_typeof(headers) = 'object'),
     CONSTRAINT ck_transfer_events_nonempty CHECK (
@@ -234,8 +235,34 @@ CREATE TABLE IF NOT EXISTS transfer_events
         ),
     CONSTRAINT ck_published_requires_timestamp CHECK (
         status <> 'PUBLISHED' OR published_at IS NOT NULL
-        )
+        ),
+    CONSTRAINT ck_attempt_count_positive CHECK (attempt_count >= 0),
+    CONSTRAINT ck_retry_after_created CHECK (next_retry_at >= created_at)
 );
+
+-- 인덱스--
+-- 배치 처리용
+CREATE INDEX IF NOT EXISTS ix_transfer_events_batch_processing
+    ON transfer_events (status, next_retry_at, created_at)
+    WHERE status IN ('PENDING', 'FAILED') AND attempt_count < 5;
+
+-- SENDING stuck 복구용
+CREATE INDEX IF NOT EXISTS ix_transfer_events_stuck_sending
+    ON transfer_events (updated_at)
+    WHERE status = 'SENDING';
+
+-- 모니터링용
+CREATE INDEX IF NOT EXISTS ix_transfer_events_monitoring
+    ON transfer_events (status, created_at);
+
+-- Aggregate 조회용 (디버깅)
+CREATE INDEX IF NOT EXISTS ix_transfer_events_aggregate
+    ON transfer_events (aggregate_type, aggregate_id, created_at);
+
+-- DEAD_LETTER 관리용
+CREATE INDEX IF NOT EXISTS ix_transfer_events_dead_letter
+    ON transfer_events (updated_at)
+    WHERE status = 'DEAD_LETTER';
 
 COMMENT ON TABLE transfer_events IS 'Outbox: DB 커밋과 함께 기록되는 발행 보장 버퍼';
 COMMENT ON COLUMN transfer_events.event_id IS 'Snowflake(Long) 이벤트 고유 ID (idempotency/재생 기준)';
@@ -252,23 +279,3 @@ COMMENT ON COLUMN transfer_events.status IS '상태(PENDING|SENDING|PUBLISHED|FA
 COMMENT ON COLUMN transfer_events.attempt_count IS '발행 재시도 누적 횟수';
 COMMENT ON COLUMN transfer_events.next_retry_at IS '재시도 가능 시각(백오프)';
 COMMENT ON COLUMN transfer_events.last_error IS '최근 실패 에러 메시지 요약';
-
--- 인덱스
--- PENDING 픽업 (backoff 고려)
-CREATE INDEX IF NOT EXISTS ix_transfer_events_pick_pending
-    ON transfer_events (next_retry_at, created_at)
-    WHERE status = 'PENDING';
-
--- FAILED 재시도
-CREATE INDEX IF NOT EXISTS ix_transfer_events_retry_failed
-    ON transfer_events (next_retry_at, created_at)
-    WHERE status = 'FAILED';
-
--- Aggregate 조회 최적화
-CREATE INDEX IF NOT EXISTS ix_transfer_events_aggregate
-    ON transfer_events (aggregate_type, aggregate_id, created_at);
-
--- SENDING stuck 복구용
-CREATE INDEX IF NOT EXISTS ix_transfer_events_recover_sending
-    ON transfer_events (updated_at)
-    WHERE status = 'SENDING';

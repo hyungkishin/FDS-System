@@ -2,7 +2,7 @@ package io.github.hyungkishin.transentia.infra.rdb.adapter
 
 import io.github.hyungkishin.transentia.application.required.AccountBalanceRepository
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.model.account.AccountBalance
+import io.github.hyungkishin.transentia.container.model.account.AccountBalance
 import io.github.hyungkishin.transentia.infra.rdb.entity.AccountBalanceJpaEntity
 import io.github.hyungkishin.transentia.infra.rdb.repository.AccountBalanceJpaRepository
 import org.springframework.stereotype.Component

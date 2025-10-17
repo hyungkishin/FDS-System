@@ -1,8 +1,6 @@
 plugins {
-    id("org.springframework.boot")
-    id("io.spring.dependency-management")
-    kotlin("jvm")
-    kotlin("plugin.spring")
+    id("transentia.spring-boot-app")
+    id("transentia.kafka-convention")
 }
 
 dependencies {
@@ -10,13 +8,26 @@ dependencies {
     implementation(project(":transfer-infra"))
     implementation(project(":common-application"))
     implementation(project(":common-domain"))
+    implementation(project(":kafka-config"))
+    implementation(project(":kafka-producer"))
+    implementation(project(":kafka-model"))
 
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter")
-    implementation("org.springframework.boot:spring-boot-starter-jdbc")
-    implementation("org.springframework.kafka:spring-kafka")
+    implementation("io.confluent:kafka-avro-serializer:7.9.2")
 
-    runtimeOnly("org.postgresql:postgresql")
+    // 테스트 의존성 추가
+    testImplementation(project(":transfer-domain"))  // TransferEvent 사용을 위해 TODO application 으로 eventType 분리 개선
+    testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
+}
 
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
+tasks.withType<Test> {
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
+
+tasks.register<Test>("performanceTest") {
+    useJUnitPlatform()
+    include("**/*PerformanceTest*")
+    group = "verification"
+    description = "성능 테스트 실행"
 }

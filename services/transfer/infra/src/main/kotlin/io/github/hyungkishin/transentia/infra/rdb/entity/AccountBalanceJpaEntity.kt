@@ -1,12 +1,12 @@
 package io.github.hyungkishin.transentia.infra.rdb.entity
 
+import io.github.hyungkishin.transentia.common.model.Amount
+import io.github.hyungkishin.transentia.common.model.Currency
 import io.github.hyungkishin.transentia.common.snowflake.SnowFlakeId
-import io.github.hyungkishin.transentia.domain.model.account.AccountBalance
-import io.github.hyungkishin.transentia.domain.model.account.Money
+import io.github.hyungkishin.transentia.container.model.account.AccountBalance
 import io.github.hyungkishin.transentia.infra.config.BaseEntity
 import jakarta.persistence.*
 import org.hibernate.Hibernate
-import org.springframework.data.domain.Persistable
 
 @Entity
 @Table(name = "account_balances")
@@ -21,16 +21,26 @@ class AccountBalanceJpaEntity(
     @Column(name = "user_id", nullable = false)
     val userId: Long,
 
+    /**
+     * DB에는 소수점 없는 정수(Long) 값 저장 (scale 반영된 raw value)
+     */
     @Column(name = "balance", nullable = false)
     var balance: Long,
+
+    /**
+     * 통화 코드 (KRW, USD, ...)
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "currency", nullable = false)
+    val currency: Currency = Currency.KRW,
 
     @Version
     var version: Long,
 
-) : BaseEntity() {
+    ) : BaseEntity() {
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)  // 여기서만 읽기 전용
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
     var user: UserJpaEntity? = null
 
     fun toDomain(): AccountBalance =
@@ -38,7 +48,7 @@ class AccountBalanceJpaEntity(
             SnowFlakeId(id),
             SnowFlakeId(userId),
             accountNumber,
-            Money.fromRawValue(balance),
+            Amount.fromMinor(balance, Currency.KRW),
             version,
         )
 
@@ -47,7 +57,8 @@ class AccountBalanceJpaEntity(
             AccountBalanceJpaEntity(
                 id = domain.id.value,
                 userId = domain.userId.value,
-                balance = domain.current().rawValue,
+                balance = domain.current().minor,
+                currency = domain.current().currency,
                 accountNumber = domain.accountNumber,
                 version = domain.version,
             )
